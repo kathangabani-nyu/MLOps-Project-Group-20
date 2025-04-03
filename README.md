@@ -12,7 +12,7 @@ We propose a machine learning system to enhance lecture accessibility for univer
 **Non-ML status quo:**  
 Students must watch lengthy recordings or rely on manual note-taking. Most academic platforms do not offer real-time summarization or question answering.
 
-**ML solution — EduPulse:**  
+**ML solution — Transcept:**  
 - Transcribes lectures using Whisper ASR  
 - Summarizes content with a LoRA fine-tuned Mistral-7B Instruct model  
 - Answers student questions using a LoRA fine-tuned Phi-3.5 Mini model  
@@ -25,9 +25,9 @@ Increased user engagement and reduced lecture playback time.
 ## Contributors
 
 All Members: Ideation, integration, infra, pipelines  
-- **Aishwarya**: Model training (Units 4 & 5)  
-- **Anushka**: Model serving and monitoring (Units 6 & 7)  
-- **Bharat**: Data pipeline (Unit 8)  
+- **Aishwarya**: Model training (Units 4 & 5)
+- **Bharat**: Model serving and monitoring (Units 6 & 7)  
+- **Anushka**: Data pipeline (Unit 8)  
 - **Kathan**: Continuous Integration/Delivery (Unit 3)
 
 ---
@@ -75,12 +75,12 @@ All Members: Ideation, integration, infra, pipelines
 - Infra: Chameleon cloud, Ray, MLflow. FlashAttention preferred.  
 - Difficulty: Efficient large-model fine-tuning (Units 4 & 5)
 
-### Model Serving & Monitoring – Anushka
+### Model Serving & Monitoring – Bharath
 - Strategy: FastAPI + vLLM/TGI, Prometheus-based metrics  
 - Optimization: 4-bit vs. full precision inference  
 - Difficulty: Load tests + canary deployments (Units 6 & 7)
 
-### Data Pipeline – Bharath
+### Data Pipeline – Anushka
 - ETL: Whisper → transcript → clean → segment → summary/QA  
 - Simulated ingestion via scripts/Kafka  
 - Storage: Persistent volumes  
