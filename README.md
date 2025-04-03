@@ -1,4 +1,5 @@
-# EduPulse: LoRA Fine-tuned Summarization and QA for Lecture Transcripts
+# Transcept
+#LoRA Fine-tuned Summarization and QA for Lecture Transcripts
 
 ## Goal
 
