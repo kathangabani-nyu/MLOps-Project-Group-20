@@ -1,99 +1,100 @@
-# Transcept
-#LoRA Fine-tuned Summarization and QA for Lecture Transcripts
-
-## Goal
-
-We propose a machine learning system to enhance lecture accessibility for university students by automating the generation of summaries and enabling question answering from lecture content. The system integrates seamlessly into existing LMS (Learning Management System) platforms (Canvas, Moodle, etc.).
-
----
+# Transcept  
+LoRA Fine-tuned Summarization and QA for Lecture Transcripts
 
 ## Value Proposition
 
-**Non-ML status quo:**  
-Students must watch lengthy recordings or rely on manual note-taking. Most academic platforms do not offer real-time summarization or question answering.
+**Current status quo:**  
+Students in universities often struggle to keep up with lecture recordings, which are long and lack intelligent navigation. LMS platforms like Canvas or Moodle do not support real-time summarization or question answering.
 
-**ML solution — Transcept:**  
-- Transcribes lectures using Whisper ASR  
-- Summarizes content with a LoRA fine-tuned Mistral-7B Instruct model  
-- Answers student questions using a LoRA fine-tuned Phi-3.5 Mini model  
+**ML-based system:**  
+We propose **Transcept**, a machine learning system integrated into LMS platforms that:
+- Transcribes lecture recordings using Whisper ASR.
+- Generates concise summaries using a **LoRA fine-tuned Mistral-7B Instruct** model.
+- Enables students to ask questions based on the lecture using a **LoRA fine-tuned Phi-3.5 Mini** model.
 
 **Business metric:**  
-Increased user engagement and reduced lecture playback time.
+We aim to **reduce lecture playback time** and **increase student engagement** with recorded content.
 
 ---
 
 ## Contributors
 
-All Members: Ideation, integration, infra, pipelines  
-- **Aishwarya**: Model training (Units 4 & 5)
-- **Bharat**: Model serving and monitoring (Units 6 & 7)  
-- **Anushka**: Data pipeline (Unit 8)  
-- **Kathan**: Continuous Integration/Delivery (Unit 3)
+| Name        | Responsible for                      |
+|-------------|--------------------------------------|
+| All members | Ideation, integration, pipelines     |
+| Aishwarya   | Model Training (Units 4 & 5)          |
+| Bharath     | Model Serving & Monitoring (Units 6 & 7) |
+| Anushka     | Data Pipeline (Unit 8)               |
+| Kathan      | Continuous X Pipeline (Unit 3)       |
 
 ---
 
 ## System Diagram
 
-1. Lecture video/audio (input)  
-2. Whisper ASR (audio → text)  
-3. Preprocessed transcript  
-4. Mistral-7B Instruct (summary generation)  
-5. Phi-3.5 Instruct (question answering)  
-6. API exposed via FastAPI or TGI  
-7. Load testing & monitoring with Prometheus/Grafana  
-8. CI/CD via Argo Workflows  
-9. Experiment tracking using MLflow and Ray clusters
+![System Diagram](./Blank%20diagram%20(3).png)
 
 ---
 
-## External Materials Summary
+## Summary of Outside Materials
 
-- **Whisper ASR**: OpenAI model trained on multilingual speech (MIT License)  
-- **Mistral-7B Instruct**: Open-weight decoder model (Apache 2.0)  
-- **Phi-3.5 Instruct**: Microsoft foundation model (MIT License)  
-- **SQuAD v2 Dataset**: Stanford QA dataset (CC BY-SA 4.0)  
-- **Lecture Audio**: Simulated/open lectures (Fair use for academic purposes)  
-- **TED-LIUMv2 (corpus)**
-
----
-
-## Infrastructure Requirements
-
-- `m1.medium` VMs: 2 for full project duration (API hosting and orchestration)  
-- `gpu_a100`: Twice weekly, 4-hour blocks (LoRA fine-tuning)  
-- Floating IP: Public access to inference API  
-- Volume Storage: 50GB persistent (data/models/logs)  
-- Object Storage (e.g., S3 or Swift): On-demand (raw audio/video inputs, model checkpoints, outputs)  
-- MLflow Server: Full project duration (training run tracking, model performance, and metrics)
+| Name              | How it was created                                                                 | Conditions of use                          |
+|-------------------|--------------------------------------------------------------------------------------|---------------------------------------------|
+| Whisper ASR       | OpenAI multilingual ASR model                                                       | MIT License                                 |
+| TED-LIUM v2       | Speech corpus from TED talks, used for ASR finetuning                              | Academic use; free for research             |
+| Mistral-7B Instruct | Open-weight LLM decoder (Mistral.ai, fine-tuned for instruction following)       | Apache 2.0                                  |
+| Phi-3.5 Mini Instruct | Microsoft foundation model for QA and reasoning                                | MIT License                                 |
+| SQuAD v2          | Stanford QA dataset with unanswerable questions                                     | CC BY-SA 4.0                                |
+| Lecture Audio     | Simulated/open lectures; NYU class material (educational fair use)                  | Fair use for academic purposes              |
 
 ---
 
-## Design Plan (by Component)
+## Summary of Infrastructure Requirements
 
-### Model Training – Aishwarya
-- Strategy: `trl.SFTTrainer` with LoRA adapters (`peft`). Format: `instruction + input → output`  
-- Infra: Chameleon cloud, Ray, MLflow. FlashAttention preferred.  
-- Difficulty: Efficient large-model fine-tuning (Units 4 & 5)
-
-### Model Serving & Monitoring – Bharath
-- Strategy: FastAPI + vLLM/TGI, Prometheus-based metrics  
-- Optimization: 4-bit vs. full precision inference  
-- Difficulty: Load tests + canary deployments (Units 6 & 7)
-
-### Data Pipeline – Anushka
-- ETL: Whisper → transcript → clean → segment → summary/QA  
-- Simulated ingestion via scripts/Kafka  
-- Storage: Persistent volumes  
-- Difficulty: Status/failure dashboards (Unit 8)
-
-### CI/CD – Kathan
-- GitHub Actions → Docker → Argo  
-- Retraining triggers: schedule or drift detection  
-- Difficulty: Canary testing + rollback (Unit 3)
+| Requirement       | How many/when                        | Justification                                               |
+|------------------|--------------------------------------|-------------------------------------------------------------|
+| `m1.medium` VMs   | 2 for full project duration          | API hosting, orchestration, data pipeline                   |
+| `gpu_a100`        | 2x/week, 4 hours                     | LoRA finetuning of large models                             |
+| Floating IP       | 1 for full duration                  | Public access for API/monitoring                           |
+| Volume Storage    | 50GB persistent                      | Logs, preprocessed transcripts, checkpoints, etc.           |
+| Object Storage    | On-demand (S3 or Swift)              | Raw audio/video inputs, finetuned models, summaries         |
+| MLflow Server     | Full duration                        | Track training runs, evaluation, performance metrics        |
 
 ---
 
-## Difficulty Points
+## Detailed Design Plan
 
-- ✅ Unit 1: Multi-model pipeline (ASR → Summarizer → QA)  
-- ✅ Unit 7: Degradation detection triggering retraining
+### Model Training and Training Platforms (Aishwarya)
+
+- **Strategy**: LoRA finetuning with `trl.SFTTrainer` using `peft`, in `instruction + input → output` format.
+- **Infra**: Runs on Chameleon cloud with Ray cluster and MLflow tracking.
+- **Techniques**: FlashAttention, bfloat16 precision, scheduled retraining.
+- **Difficulty points**:
+  - ✅ *Distributed Training via Ray Train*  
+  - ✅ *Training time vs GPU scaling (1 vs multi-GPU)*  
+- **Evaluation Plan**: After each run, models are automatically evaluated and logged to MLflow. Models that exceed threshold are registered.
+
+### Model Serving and Monitoring Platforms (Bharath)
+
+- **Strategy**: FastAPI backend with TGI/vLLM for hosting models.
+- **Optimizations**: Compare 4-bit quantization vs full precision.
+- **Monitoring**: Prometheus & Grafana dashboards for latency, throughput, error rate.
+- **Difficulty points**:
+  - ✅ *Serve both quantized and full-precision variants*  
+  - ✅ *Trigger re-training on model degradation*  
+
+### Data Pipeline (Anushka)
+
+- **ETL Steps**:
+  - Whisper transcription → clean text → segmentation → inputs to summarizer & QA
+- **Storage**: Persistent volumes for intermediate artifacts; object store for raw inputs.
+- **Streaming**: Simulated Kafka-based online data stream for inference QA testing.
+- **Difficulty point**:
+  - ✅ *Interactive data dashboard* for transcript health and error stats
+
+### Continuous X (Kathan)
+
+- **CI/CD Stack**: GitHub Actions → Docker → Argo Workflows
+- **Triggers**: Model drift, schedule, manual
+- **Staging/Canary/Prod**: Models are promoted via pipelines with validation at each stage
+- **Difficulty point**:
+  - ✅ *Canary deployments + automated rollback*
