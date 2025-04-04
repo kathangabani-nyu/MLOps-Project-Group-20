@@ -69,8 +69,8 @@ We aim to **reduce lecture playback time** and **increase student engagement** w
 - **Infra**: Runs on Chameleon cloud with Ray cluster and MLflow tracking.
 - **Techniques**: FlashAttention, bfloat16 precision, scheduled retraining.
 - **Difficulty points**:
-  - ✅ *Distributed Training via Ray Train*  
-  - ✅ *Training time vs GPU scaling (1 vs multi-GPU)*  
+  -  *Distributed Training via Ray Train*  
+  -  *Training time vs GPU scaling (1 vs multi-GPU)*  
 - **Evaluation Plan**: After each run, models are automatically evaluated and logged to MLflow. Models that exceed threshold are registered.
 
 ### Model Serving and Monitoring Platforms (Bharath)
@@ -79,8 +79,8 @@ We aim to **reduce lecture playback time** and **increase student engagement** w
 - **Optimizations**: Compare 4-bit quantization vs full precision.
 - **Monitoring**: Prometheus & Grafana dashboards for latency, throughput, error rate.
 - **Difficulty points**:
-  - ✅ *Serve both quantized and full-precision variants*  
-  - ✅ *Trigger re-training on model degradation*  
+  -  *Serve both quantized and full-precision variants*  
+  -  *Trigger re-training on model degradation*  
 
 ### Data Pipeline (Anushka)
 
@@ -89,7 +89,7 @@ We aim to **reduce lecture playback time** and **increase student engagement** w
 - **Storage**: Persistent volumes for intermediate artifacts; object store for raw inputs.
 - **Streaming**: Simulated Kafka-based online data stream for inference QA testing.
 - **Difficulty point**:
-  - ✅ *Interactive data dashboard* for transcript health and error stats
+  -  *Interactive data dashboard* for transcript health and error stats
 
 ### Continuous X (Kathan)
 
@@ -97,4 +97,4 @@ We aim to **reduce lecture playback time** and **increase student engagement** w
 - **Triggers**: Model drift, schedule, manual
 - **Staging/Canary/Prod**: Models are promoted via pipelines with validation at each stage
 - **Difficulty point**:
-  - ✅ *Canary deployments + automated rollback*
+  -  *Canary deployments + automated rollback*
