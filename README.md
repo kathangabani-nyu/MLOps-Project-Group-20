@@ -13,7 +13,7 @@ We propose **Transcept**, a machine learning system integrated into LMS platform
 - Enables students to ask questions based on the lecture using a **LoRA fine-tuned Phi-3.5 Mini** model.
 
 **Business metric:**  
-We aim to **reduce lecture playback time** and **increase student engagement** with recorded content.
+Students rapidly review key lecture summaries and access targeted Q&A for exam prep, reducing full lecture viewing time and enhancing academic engagement.
 
 ---
 
