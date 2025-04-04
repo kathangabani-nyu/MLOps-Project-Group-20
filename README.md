@@ -4,7 +4,7 @@ LoRA Fine-tuned Summarization and QA for Lecture Transcripts
 ## Value Proposition
 
 **Current status quo:**  
-Students in universities often struggle to keep up with lecture recordings, which are long and lack intelligent navigation. LMS platforms like Canvas or Moodle do not support real-time summarization or question answering.
+NYU Students across different schools often struggle to keep up with lecture recordings, which are long and lack intelligent navigation. LMS platforms like Canvas or Moodle do not support real-time summarization or question answering.
 
 **ML-based system:**  
 We propose **Transcept**, a machine learning system integrated into LMS platforms that:
