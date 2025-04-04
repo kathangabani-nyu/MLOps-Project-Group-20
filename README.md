@@ -48,17 +48,23 @@ Students rapidly review key lecture summaries and access targeted Q&A for exam p
 
 **LibriSpeech:**
 Privacy & Ethics: Derived from public domain audiobooks; minimal privacy concerns.
+
 Pre-processing: Audio files are segmented and cleaned for research.
+
 License: Public domain/permissive usage for academic and research purposes.
 
 **TED Talks Dataset:**
 Privacy & Ethics: Based on publicly available TED presentations; potential concerns over speaker representation and demographic diversity.
+
 Pre-processing: Provided as pre-processed transcripts and metadata.
+
 License: Typically allowed for non-commercial research use with proper attribution, though specific usage terms should be verified from the dataset source.
 
 **SQuAD v2:**
 Privacy & Ethics: Composed of text passages and crowdsourced QA pairs; no significant privacy issues, though inherent biases in source material might exist.
+
 Pre-processing: Curated and manually annotated for consistency and clarity.
+
 License: Licensed under Creative Commons Attribution-ShareAlike 4.0 (CC BY-SA 4.0), permitting use in research and educational contexts with proper attribution.
 
 ---
