@@ -31,7 +31,7 @@ We aim to **reduce lecture playback time** and **increase student engagement** w
 
 ## System Diagram
 
-![System Diagram](./Blank%20diagram%20(3).png)
+![Blank diagram (3)](https://github.com/user-attachments/assets/7a55c086-b0df-45bd-8a0b-ab84f2a85003)
 
 ---
 
