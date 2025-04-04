@@ -7,7 +7,7 @@ LoRA Fine-tuned Summarization and QA for Lecture Transcripts
 NYU Students across different schools often struggle to keep up with lecture recordings, which are long and lack intelligent navigation. LMS platforms like Canvas or Moodle do not support real-time summarization or question answering.
 
 **ML-based system:**  
-We propose **Transcept**, a machine learning system integrated into LMS platforms that:
+We propose **Transcept**, a machine learning system integrated into LMS platforms that uses 3 ML models as follows:
 - Transcribes lecture recordings using Whisper ASR.
 - Generates concise summaries using a **LoRA fine-tuned Mistral-7B Instruct** model.
 - Enables students to ask questions based on the lecture using a **LoRA fine-tuned Phi-3.5 Mini** model.
