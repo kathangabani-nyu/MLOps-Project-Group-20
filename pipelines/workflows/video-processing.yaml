@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: video-processing
+spec:
+  entrypoint: video-to-summary
+  templates:
+  - name: video-to-summary
+    dag:
+      tasks:
+      - name: transcribe
+        template: transcription
+      - name: process
+        template: text-processing
+        dependencies: [transcribe]
+      - name: summarize
+        template: summary-generation
+        dependencies: [process]
+  
+  - name: transcription
+    container:
+      image: python:3.9
+      command: [python]
+      args: ["-c", "print('Transcription placeholder')"]
+  
+  - name: text-processing
+    container:
+      image: python:3.9
+      command: [python]
+      args: ["-c", "print('Processing placeholder')"]
+  
+  - name: summary-generation
+    container:
+      image: python:3.9
+      command: [python]
+      args: ["-c", "print('Summary placeholder')"]

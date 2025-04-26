@@ -1,0 +1,11 @@
+mode: standalone
+persistence:
+  size: 50Gi
+resources:
+  requests:
+    memory: 2Gi
+accessKey: minio
+secretKey: minio123
+service:
+  type: NodePort
+  nodePort: 30900
