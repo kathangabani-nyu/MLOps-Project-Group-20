@@ -1,0 +1,192 @@
+#!/usr/bin/env python
+"""
+train_bart_ray_mlflow.py
+---------------------------------
+Fine‑tunes facebook/bart‑large‑cnn on CNN‑DailyMail 3.0.0 with
+ * Ray Train (fault tolerant, multi‑GPU)
+ * MLflow tracking + model registry
+ * Optional LoRA PEFT
+ * Gradient accumulation & bf16
+"""
+
+import argparse, os, logging
+from datetime import datetime
+import mlflow
+from datasets import load_dataset
+import torch
+from transformers import (
+    BartTokenizerFast, BartForConditionalGeneration,
+    Seq2SeqTrainingArguments, Seq2SeqTrainer,
+    DataCollatorForSeq2Seq, set_seed
+)
+from peft import get_peft_model, LoraConfig, TaskType
+
+# ------------- Ray -------------
+import ray
+from ray import train
+from ray.train import ScalingConfig, Checkpoint
+from ray.train.torch import TorchTrainer
+# --------------------------------
+
+# ---------- CLI -----------------
+def parse_args():
+    p = argparse.ArgumentParser()
+    p.add_argument("--gpus", type=int, default=1, help="#GPUs Ray should use")
+    p.add_argument("--batch", type=int, default=2, help="per‑device batch size")
+    p.add_argument("--grad_accum", type=int, default=8)
+    p.add_argument("--epochs", type=int, default=3)
+    p.add_argument("--precision", choices=["fp32", "bf16"], default="bf16")
+    p.add_argument("--strategy", choices=["ddp", "fsdp"], default="ddp")
+    p.add_argument("--lora_r", type=int, default=0, help="0 = full FT")
+    p.add_argument("--output_dir", default="bart_output")
+    p.add_argument("--resume_from", default=None)
+    p.add_argument("--seed", type=int, default=1234)
+    return p.parse_args()
+# --------------------------------
+
+def ray_train_loop(config):
+    """Runs *inside* each Ray worker."""
+    set_seed(config["seed"])
+
+    mlflow.set_tracking_uri("http://localhost:5000")
+    mlflow.set_experiment("transcept-summarization")
+    # Each Ray worker logs to the same run (using run_id in config)
+    mlflow.start_run(run_id=config["run_id"])
+
+    tokenizer = BartTokenizerFast.from_pretrained(config["model_id"])
+    model     = BartForConditionalGeneration.from_pretrained(config["model_id"])
+
+    # Optional LoRA
+    if config["lora_r"] > 0:
+        lora_cfg = LoraConfig(
+            r=config["lora_r"], lora_alpha=32, lora_dropout=0.05,
+            bias="none", task_type=TaskType.SEQ_2_SEQ_LM
+        )
+        model = get_peft_model(model, lora_cfg)
+
+    # bf16 only if supported
+    fp16 = False
+    bf16 = config["precision"] == "bf16" and torch.cuda.is_bf16_supported()
+
+    raw_ds = load_dataset("cnn_dailymail", "3.0.0")
+    train_ds = raw_ds["train"].shuffle(seed=42).select(range(10000))
+    eval_ds  = raw_ds["validation"].shuffle(seed=42).select(range(2000))
+
+    def preprocess(b):
+        model_inputs = tokenizer(
+            b["article"], truncation=True, padding="max_length",
+            max_length=1024
+        )
+        with tokenizer.as_target_tokenizer():
+            labels = tokenizer(
+                b["highlights"], truncation=True, padding="max_length",
+                max_length=128
+            )
+        model_inputs["labels"] = labels["input_ids"]
+        return model_inputs
+
+    train_ds = train_ds.map(preprocess, batched=True,
+                            remove_columns=train_ds.column_names)
+    eval_ds  = eval_ds.map(preprocess,  batched=True,
+                            remove_columns=eval_ds.column_names)
+
+    args = Seq2SeqTrainingArguments(
+        output_dir     = config["output_dir"],
+        per_device_train_batch_size = config["batch"],
+        per_device_eval_batch_size  = config["batch"],
+        gradient_accumulation_steps = config["grad_accum"],
+        learning_rate = 3e‑5,
+        num_train_epochs = config["epochs"],
+        logging_strategy = "epoch",
+        eval_strategy    = "epoch",
+        save_strategy    = "epoch",
+        predict_with_generate=True,
+        bf16 = bf16,
+        fp16 = fp16,
+        dataloader_drop_last = True,          # keeps shards equal
+        seed = config["seed"],
+        ddp_find_unused_parameters = False,   # quicker
+    )
+
+    # choose backend
+    if config["strategy"] == "fsdp":
+        args.fsdp = "full_shard auto_wrap"
+        args.fsdp_transformer_layer_cls_to_wrap = \
+            "BartDecoderLayer,BartEncoderLayer"
+
+    collator = DataCollatorForSeq2Seq(tokenizer, model)
+
+    trainer = Seq2SeqTrainer(
+        model=model,
+        args=args,
+        train_dataset=train_ds,
+        eval_dataset =eval_ds,
+        data_collator=collator,
+    )
+
+    # Resume?
+    if config["resume_from"]:
+        trainer.train(resume_from_checkpoint=config["resume_from"])
+    else:
+        trainer.train()
+
+    # Eval & log
+    metrics = trainer.evaluate(max_length=128, num_beams=4)
+    mlflow.log_metrics(metrics)
+    # Save model to Ray Checkpoint for downstream resume
+    ckpt_path = os.path.join(config["output_dir"], "final")
+    trainer.save_model(ckpt_path)
+    tokenizer.save_pretrained(ckpt_path)
+    mlflow.pytorch.log_model(trainer.model, "model")
+
+    mlflow.end_run()
+
+    # Tell Ray where the checkpoint is
+    return Checkpoint.from_directory(ckpt_path)
+
+# ===================== MAIN =========================
+def main():
+    args = parse_args()
+
+    # unique run id lets workers share same MLflow run
+    run = mlflow.start_run(run_name=f"ray_bart_{datetime.now():%Y%m%d_%H%M%S}")
+    run_id = run.info.run_id
+    mlflow.end_run()           # reopen inside workers
+
+    cfg = {
+        "model_id"    : "facebook/bart-large-cnn",
+        "batch"       : args.batch,
+        "grad_accum"  : args.grad_accum,
+        "epochs"      : args.epochs,
+        "precision"   : args.precision,
+        "strategy"    : args.strategy,
+        "lora_r"      : args.lora_r,
+        "output_dir"  : args.output_dir,
+        "resume_from" : args.resume_from,
+        "seed"        : args.seed,
+        "run_id"      : run_id,
+    }
+
+    # -------- launch Ray trainer ----------
+    ray.init()
+
+    scaling = ScalingConfig(
+        num_workers=args.gpus,
+        use_gpu=True,
+        resources_per_worker={"GPU": 1}
+    )
+
+    trainer = TorchTrainer(
+        train_loop_per_worker = ray_train_loop,
+        scaling_config        = scaling,
+        run_config=train.RunConfig(storage_path=args.output_dir),
+        train_loop_config     = cfg
+    )
+
+    result = trainer.fit()
+    print("Training finished; best checkpoint dir:", result.checkpoint.uri)
+
+    ray.shutdown()
+
+if __name__ == "__main__":
+    main()
