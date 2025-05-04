@@ -1,0 +1,12 @@
+FROM quay.io/jupyter/pytorch-notebook:latest
+
+USER ${NB_UID}
+
+RUN pip install --no-cache-dir \
+    torch torchvision \
+    "lightning<2.5.0.post0" \
+    "litgpt[all]==0.5.7" \
+    ray==2.42.1 \
+    mlflow && \
+    fix-permissions "${CONDA_DIR}" && \
+    fix-permissions "/home/${NB_USER}"
