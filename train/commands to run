@@ -1,0 +1,12 @@
+# MLFlow
+docker run -it -v /home/cc/llm-chi/torch:/workspace --gpus all --ipc host pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+pip install 'litgpt[all]'==0.5.7 'lightning<2.5.0.post0'
+litgpt download TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T
+
+# Ray
+export HOST_IP=$(curl --silent http://169.254.169.254/latest/meta-data/public-ipv4 )
+docker compose -f docker-compose-ray.yaml up --build -d
+
+docker logs jupyter-ray
+
+ray job submit --runtime-env ray_runtime.json  --verbose  --working-dir .  -- python train.py 
