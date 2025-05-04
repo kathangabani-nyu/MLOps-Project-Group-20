@@ -1,0 +1,8 @@
+{
+    "pip": "ray_requirements.txt",
+    "env_vars": {
+        "DATA_DIR": "/mnt/block1",
+        "FLOATING_IP": "129.114.108.6"
+    },
+    "excludes": ["checkpoints/"]
+}
