@@ -3,7 +3,7 @@
     "env_vars": {
         "DATA_DIR": "/mnt/block1",
         "FLOATING_IP": "129.114.108.23"
-        "MLFLOW_TRACKING_URI": "http://YOUR_FLOATING_IP:8000"
+        "MLFLOW_TRACKING_URI": "http://129.114.108.23:8000"
     },
     "excludes": ["checkpoints/"]
 }
