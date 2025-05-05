@@ -1,3 +1,4 @@
+version: "3.8"
 name: tracking_service
 services:
   minio:
@@ -6,7 +7,7 @@ services:
     restart: always
     expose:
       - "9000"
-    ports:  
+    ports:
       - "9000:9000"
       - "9001:9001"
     environment:
@@ -31,7 +32,7 @@ services:
       mc alias set minio http://minio:9000 Project20 Project@20 &&
       if ! mc ls minio/mlflow-artifacts; then
         mc mb minio/mlflow-artifacts &&
-        echo 'Bucket mlflow-artifacts created'
+        echo 'Bucket mlflow-artifacts created';
       else
         echo 'Bucket mlflow-artifacts already exists';
       fi"
@@ -58,15 +59,15 @@ services:
       - postgres
       - minio-create-bucket
     environment:
-      MLFLOW_TRACKING_URI: http://0.0.0.0:8000
-      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      MLFLOW_TRACKING_URI: http://${HOST_IP}:8000
+      MLFLOW_S3_ENDPOINT_URL: http://${HOST_IP}:9000
       AWS_ACCESS_KEY_ID: "Project20"
       AWS_SECRET_ACCESS_KEY: "Project@20"
     ports:
       - "8000:8000"
     command: >
       /bin/sh -c "pip install psycopg2-binary boto3 &&
-      mlflow server --backend-store-uri postgresql://user:password@postgres/mlflowdb 
+      mlflow server --backend-store-uri postgresql://user:password@postgres/mlflowdb
       --artifacts-destination s3://mlflow-artifacts/ --serve-artifacts --host 0.0.0.0 --port 8000"
 
 volumes:
