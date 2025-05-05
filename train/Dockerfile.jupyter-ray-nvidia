@@ -1,0 +1,15 @@
+FROM jupyter/scipy-notebook:lab-4.2.1
+
+RUN pip install --no-cache-dir \
+    ray==2.42.1 \
+    mlflow \
+    "lightning<2.5.0.post0" \
+    "litgpt[all]==0.5.7" \
+    datasets \
+    peft \
+    trl
+
+ENV NB_USER jovyan
+USER root
+RUN adduser $NB_USER video
+USER $NB_USER
