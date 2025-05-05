@@ -3,3 +3,7 @@ torchvision
 lightning<2.5.0.post0
 litgpt[all]==0.5.7
 mlflow
+datasets
+transformers
+peft
+trl
