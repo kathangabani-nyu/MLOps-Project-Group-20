@@ -12,7 +12,7 @@ PUBLIC_KEY = """"""
 
 IMAGE_NAME = "CC-Ubuntu20.04"
 FLAVOR_NAME = "m1.medium"
-NETWORK_NAME = "sharednet1-project20"
+NETWORK_NAME = "sharednet1"
 INSTANCE_NAMES = ["k8s-master-project20", "k8s-worker1-project20", "k8s-worker2-project20"]
 
 # 1. Set project context
