@@ -1,0 +1,65 @@
+#!/usr/bin/env python
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+from transformers import BartTokenizerFast
+from optimum.onnxruntime import ORTModelForSeq2SeqLM
+import torch
+
+# Request & response schemas
+tmp = dict(description="BART summarization")
+class SummarizationRequest(BaseModel):
+    text: str = Field(..., description="The input text to summarize")
+    max_length: int = Field(150, ge=1, description="Max summary tokens")
+    min_length: int = Field(40, ge=1, description="Min summary tokens")
+    num_beams: int = Field(4, ge=1, description="Beam size for generation")
+
+class SummarizationResponse(BaseModel):
+    summary: str = Field(..., description="Generated summary text")
+
+app = FastAPI(
+    title="BART Summarization API (ONNX)",
+    version="1.0.0",
+    description="High-throughput summarization using ONNXRuntime"
+)
+
+# Load device
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# Load tokenizer & ONNX model
+MODEL_DIR = "onnx_bart"
+tokenizer = BartTokenizerFast.from_pretrained(MODEL_DIR)
+# ORTModelForSeq2SeqLM provides .generate() compatible with Transformers
+model = ORTModelForSeq2SeqLM.from_pretrained(
+    MODEL_DIR,
+    provider_mapping={"CUDAExecutionProvider": "CUDAExecutionProvider", "CPUExecutionProvider": "CPUExecutionProvider"}
+)
+model.to_device(device)
+
+@app.post("/summarize", response_model=SummarizationResponse)
+def summarize(req: SummarizationRequest):
+    try:
+        # Tokenize
+        inputs = tokenizer(
+            req.text,
+            truncation=True,
+            padding="longest",
+            max_length=1024,
+            return_tensors="pt"
+        ).to(device)
+
+        # Generate summary
+        summary_ids = model.generate(
+            **inputs,
+            max_length=req.max_length,
+            min_length=req.min_length,
+            num_beams=req.num_beams,
+            early_stopping=True
+        )
+
+        # Decode
+        summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+        return SummarizationResponse(summary=summary)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
