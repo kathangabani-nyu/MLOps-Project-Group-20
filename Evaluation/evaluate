@@ -1,0 +1,153 @@
+#!/usr/bin/env python
+"""
+eval_bart_mlflow_minio.py
+-------------------------
+Evaluate a fine-tuned BART summarization model, compute ROUGE,
+and push metrics, model, and raw predictions into MLflow + MinIO.
+"""
+
+import os
+import argparse
+from datetime import datetime
+
+import mlflow
+import torch
+from datasets import load_dataset, load_metric
+from transformers import BartTokenizerFast, BartForConditionalGeneration
+from peft import PeftModel
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Evaluate BART and log to MLflow+MinIO")
+    parser.add_argument("--model_dir",       type=str, required=True,
+                        help="Path to directory with model and tokenizer")
+    parser.add_argument("--use_peft",        action="store_true",
+                        help="Wrap base model with PeftModel to load LoRA adapters")
+    parser.add_argument("--dataset_name",    type=str, default="cnn_dailymail",
+                        help="HF dataset for evaluation")
+    parser.add_argument("--dataset_config",  type=str, default="3.0.0",
+                        help="HF dataset config (e.g. 3.0.0)")
+    parser.add_argument("--split",           type=str, default="test",
+                        help="Which split to evaluate on")
+    parser.add_argument("--sample_size",     type=int, default=None,
+                        help="If set, only evaluate this many examples")
+    parser.add_argument("--batch_size",      type=int, default=8,
+                        help="Batch size for generation")
+    parser.add_argument("--max_input_length",  type=int, default=1024,
+                        help="Max tokens for input articles")
+    parser.add_argument("--max_summary_length", type=int, default=128,
+                        help="Max tokens for generated summaries")
+    parser.add_argument("--num_beams",       type=int, default=4,
+                        help="Beam size for generation")
+    parser.add_argument("--device",          type=str, default="cuda",
+                        help="Device (cuda or cpu)")
+    parser.add_argument("--mlflow_uri",      type=str, required=True,
+                        help="MLflow Tracking URI (http or file://)")
+    parser.add_argument("--experiment_name", type=str, default="transcept-summarization",
+                        help="MLflow experiment name")
+    parser.add_argument("--run_name",        type=str, default=None,
+                        help="MLflow run name (default: eval_YYYYMMDD_HHMMSS)")
+    parser.add_argument("--minio_endpoint",  type=str, required=True,
+                        help="S3 endpoint URL for MinIO (e.g. http://minio:9000)")
+    parser.add_argument("--minio_access_key",type=str, required=True,
+                        help="MinIO access key")
+    parser.add_argument("--minio_secret_key",type=str, required=True,
+                        help="MinIO secret key")
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+
+    # 1) Configure MinIO / S3 for MLflow artifact store
+    os.environ["AWS_ACCESS_KEY_ID"]     = args.minio_access_key
+    os.environ["AWS_SECRET_ACCESS_KEY"] = args.minio_secret_key
+    os.environ["MLFLOW_S3_ENDPOINT_URL"] = args.minio_endpoint
+
+    # 2) MLflow setup
+    mlflow.set_tracking_uri(args.mlflow_uri)
+    mlflow.set_experiment(args.experiment_name)
+    run_name = args.run_name or f"eval_{datetime.now():%Y%m%d_%H%M%S}"
+    with mlflow.start_run(run_name=run_name) as run:
+
+        # Log all config params
+        mlflow.log_params({
+            "model_dir": args.model_dir,
+            "use_peft": args.use_peft,
+            "dataset": f"{args.dataset_name}/{args.dataset_config}:{args.split}",
+            "sample_size": args.sample_size or "full",
+            "batch_size": args.batch_size,
+            "max_input_length": args.max_input_length,
+            "max_summary_length": args.max_summary_length,
+            "num_beams": args.num_beams,
+        })
+
+        # 3) Load tokenizer & model
+        tokenizer = BartTokenizerFast.from_pretrained(args.model_dir)
+        base_model = BartForConditionalGeneration.from_pretrained(args.model_dir)
+        model = PeftModel.from_pretrained(base_model, args.model_dir) if args.use_peft else base_model
+        device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+        model.to(device).eval()
+
+        # 4) Load dataset & metric
+        ds = load_dataset(args.dataset_name, args.dataset_config, split=args.split)
+        if args.sample_size:
+            ds = ds.select(range(args.sample_size))
+        rouge = load_metric("rouge")
+
+        # Prepare output CSV
+        out_rows = []
+        csv_path = "predictions.csv"
+
+        # 5) Run inference in batches
+        for start in range(0, len(ds), args.batch_size):
+            batch = ds[start:start + args.batch_size]
+            enc = tokenizer(batch["article"],
+                            truncation=True,
+                            padding="longest",
+                            max_length=args.max_input_length,
+                            return_tensors="pt"
+            ).to(device)
+
+            with torch.no_grad():
+                gen = model.generate(
+                    **enc,
+                    max_length=args.max_summary_length,
+                    num_beams=args.num_beams
+                )
+
+            preds = tokenizer.batch_decode(gen, skip_special_tokens=True)
+            refs  = batch["highlights"]
+
+            # accumulate for ROUGE
+            rouge.add_batch(predictions=preds, references=refs)
+
+            # store each row
+            for art, ref, pred in zip(batch["article"], refs, preds):
+                out_rows.append({"article": art, "reference": ref, "prediction": pred})
+
+        # 6) Compute ROUGE and log metrics
+        rouge_res = rouge.compute(use_stemmer=True)
+        metrics = {f"rouge_{k}_f1": v.mid.fmeasure for k, v in rouge_res.items()}
+        mlflow.log_metrics(metrics)
+        print("ROUGE results:")
+        for k, v in metrics.items():
+            print(f"  {k}: {v:.4f}")
+
+        # 7) Write out predictions CSV and log as artifact
+        import csv
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["article","reference","prediction"])
+            writer.writeheader()
+            writer.writerows(out_rows)
+        mlflow.log_artifact(csv_path, artifact_path="predictions")
+        print(f"Saved and logged predictions to {csv_path}")
+
+        # 8) Log model artifact (to S3/MinIO via MLflow)
+        mlflow.pytorch.log_model(model, artifact_path="model")
+        print("Logged PyTorch model to MLflow artifact store (MinIO).")
+
+    print(f"Run completed and logged under MLflow run ID: {run.info.run_id}")
+
+
+if __name__ == "__main__":
+    main()
