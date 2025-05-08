@@ -1,0 +1,62 @@
+#!/usr/bin/env python
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+import torch
+from transformers import BartTokenizerFast, BartForConditionalGeneration
+
+class SummarizationRequest(BaseModel):
+    text: str = Field(..., description="The input document or text to summarize")
+    max_length: int = Field(150, description="Maximum length of generated summary")
+    min_length: int = Field(40, description="Minimum length of generated summary")
+    num_beams: int = Field(4, ge=1, description="Beam size for beam search")
+
+class SummarizationResponse(BaseModel):
+    summary: str = Field(..., description="The generated summary text")
+
+app = FastAPI(
+    title="Text Summarization API",
+    description="API for summarizing documents using a fine-tuned BART model",
+    version="1.0.0"
+)
+
+# Load device
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# Load your fine-tuned model & tokenizer
+MODEL_DIR = "path/to/your/bart_output/final"   # adjust to your dir
+tokenizer = BartTokenizerFast.from_pretrained(MODEL_DIR)
+model = BartForConditionalGeneration.from_pretrained(MODEL_DIR)
+model.to(device).eval()
+
+@app.post("/summarize", response_model=SummarizationResponse)
+def summarize(req: SummarizationRequest):
+    try:
+        # Tokenize input text
+        inputs = tokenizer(
+            req.text,
+            truncation=True,
+            padding="longest",
+            max_length=1024,
+            return_tensors="pt"
+        ).to(device)
+
+        # Generate summary
+        with torch.no_grad():
+            summary_ids = model.generate(
+                inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                max_length=req.max_length,
+                min_length=req.min_length,
+                num_beams=req.num_beams,
+                early_stopping=True
+            )
+
+        # Decode the summary
+        summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+
+        return SummarizationResponse(summary=summary)
+
+    except Exception as e:
+        # Return a 500 with the error message
+        raise HTTPException(status_code=500, detail=str(e))
