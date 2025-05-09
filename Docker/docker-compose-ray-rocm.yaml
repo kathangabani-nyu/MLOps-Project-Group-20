@@ -1,12 +1,13 @@
 version: "3.8"
-name: ray_cluster
+
 services:
+  # ========================
+  # Tracking Service Stack
+  # ========================
   minio:
     image: minio/minio
     container_name: minio
     restart: always
-    expose:
-      - "9000"
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -14,7 +15,7 @@ services:
       MINIO_ROOT_USER: "Project20"
       MINIO_ROOT_PASSWORD: "Project@20"
     healthcheck:
-      test: timeout 5s bash -c ':> /dev/tcp/127.0.0.1/9000' || exit 1
+      test: timeout 5s bash -c '>/dev/tcp/127.0.0.1/9000' || exit 1
       interval: 1s
       timeout: 10s
       retries: 5
@@ -29,13 +30,13 @@ services:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      mc alias set minio http://minio:9000 Project20 Project@20 &&
-      if ! mc ls minio/mlflow-artifacts; then
-        mc mb minio/mlflow-artifacts &&
-        echo 'Bucket mlflow-artifacts created';
-      else
-        echo 'Bucket mlflow-artifacts already exists';
-      fi"
+        mc alias set minio http://minio:9000 Project20 Project@20 &&
+        if ! mc ls minio/mlflow-artifacts; then
+          mc mb minio/mlflow-artifacts && echo 'Bucket created';
+        else
+          echo 'Bucket exists';
+        fi
+      "
 
   postgres:
     image: postgres:latest
@@ -59,43 +60,51 @@ services:
       - postgres
       - minio-create-bucket
     environment:
-      MLFLOW_TRACKING_URI: http://${HOST_IP}:8000
-      MLFLOW_S3_ENDPOINT_URL: http://${HOST_IP}:9000
+      MLFLOW_TRACKING_URI: http://${KVM_IP}:8000
+      MLFLOW_S3_ENDPOINT_URL: http://${KVM_IP}:9000
       AWS_ACCESS_KEY_ID: "Project20"
       AWS_SECRET_ACCESS_KEY: "Project@20"
     ports:
       - "8000:8000"
     command: >
       /bin/sh -c "pip install psycopg2-binary boto3 &&
-      mlflow server --backend-store-uri postgresql://user:password@postgres/mlflowdb
-      --artifacts-destination s3://mlflow-artifacts/ --serve-artifacts --host 0.0.0.0 --port 8000"
+        mlflow server \
+          --backend-store-uri postgresql://user:password@postgres/mlflowdb \
+          --artifacts-destination s3://mlflow-artifacts/ \
+          --serve-artifacts --host 0.0.0.0 --port 8000
+      "
 
+  # ========================
+  # Ray Cluster Stack
+  # ========================
   ray-head:
-    image: mlops20/ray-worker:nvidia
+    image: ray-rocm:2.42.1              # <— use your locally built ROCm image
     container_name: ray-head
     command: |
       /bin/sh -c "
-      mkdir -p /tmp/ray &&
-      chown -R root:root /tmp/ray &&
+      mkdir -p /tmp/ray && chown -R root:root /tmp/ray &&
       ray metrics launch-prometheus &&
-      ray start --head --port=6379 --dashboard-host=0.0.0.0 --block --metrics-export-port=8080"
+      ray start --head --port=6379 --dashboard-host=0.0.0.0 \
+                --block --metrics-export-port=8080
+      "
     ports:
       - "6379:6379"
       - "8265:8265"
       - "8080:8080"
-      - "8090:8090"
-      - "9090:9090"
     shm_size: '12g'
     volumes:
       - ray_tmp:/tmp/ray
     environment:
+      # Ray dashboards:
       - RAY_GRAFANA_HOST=http://${HOST_IP}:3000
       - RAY_GRAFANA_IFRAME_HOST=http://${HOST_IP}:3000
       - RAY_PROMETHEUS_HOST=http://ray-head:9090
       - RAY_PROMETHEUS_NAME=Prometheus
+      # S3 / MLflow credentials & endpoint (on kvm@tacc):
       - AWS_ACCESS_KEY_ID=Project20
       - AWS_SECRET_ACCESS_KEY=Project@20
-      - AWS_ENDPOINT_URL=http://${HOST_IP}:9000
+      - AWS_ENDPOINT_URL=http://${KVM_IP}:9000
+      - MLFLOW_TRACKING_URI=http://${KVM_IP}:8000
     user: root
     deploy:
       resources:
@@ -105,42 +114,19 @@ services:
               count: all
               capabilities: ["gpu"]
 
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    entrypoint: |
-      /bin/sh -c "
-      while [ ! -f /tmp/ray/session_latest/metrics/grafana/grafana.ini ]; do
-        echo 'Waiting for Grafana config files...'
-        sleep 2
-      done
-      /run.sh --config /tmp/ray/session_latest/metrics/grafana/grafana.ini"
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana_storage:/var/lib/grafana
-      - ray_tmp:/tmp/ray:ro
-    environment:
-      - GF_INSTALL_PLUGINS=grafana-piechart-panel
-      - GF_PATHS_PROVISIONING=/tmp/ray/session_latest/metrics/grafana/provisioning
-      - GF_SERVER_HTTP_ADDR=0.0.0.0
-      - GF_DATABASE_TYPE=sqlite3
-      - GF_AUTH_ANONYMOUS_ENABLED=true
-      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
-      - GF_SECURITY_ALLOW_EMBEDDING=true
-      - GF_AUTH_DISABLE_LOGIN_FORM=true
-      - GF_AUTH_PROXY_ENABLED=true
-      - GF_AUTH_PROXY_AUTO_SIGN_UP=true
-    depends_on:
-      - ray-head
-
   ray-worker-1:
-    build:
-      context: .
-      dockerfile: Dockerfile.ray-worker
+    image: ray-rocm:2.42.1              # <— same local image
     container_name: ray-worker-1
     command: >
       ray start --address=ray-head:6379 --num-cpus=32 --num-gpus=1 --block
+    shm_size: '12g'
+    depends_on:
+      - ray-head
+    environment:
+      - AWS_ACCESS_KEY_ID=Project20
+      - AWS_SECRET_ACCESS_KEY=Project@20
+      - AWS_ENDPOINT_URL=http://${KVM_IP}:9000
+      - MLFLOW_TRACKING_URI=http://${KVM_IP}:8000
     deploy:
       resources:
         reservations:
@@ -148,14 +134,10 @@ services:
             - driver: "nvidia"
               count: all
               capabilities: ["gpu"]
-    environment:
-      - AWS_ACCESS_KEY_ID=Project20
-      - AWS_SECRET_ACCESS_KEY=Project@20
-      - AWS_ENDPOINT_URL=http://${HOST_IP}:9000
-    shm_size: '12g'
-    depends_on:
-      - ray-head
 
+  # ========================
+  # Jupyter (Ray Client)
+  # ========================
   jupyter:
     build:
       context: .
@@ -166,12 +148,12 @@ services:
     volumes:
       - ./workspace:/home/jovyan/work
     environment:
-      - RAY_ADDRESS=http://${HOST_IP}:8265
+      - RAY_ADDRESS=ray-head:6379     # in‐cluster Ray address
     depends_on:
       - ray-head
 
 volumes:
-  grafana_storage:
-  ray_tmp:
   minio_data:
   postgres_data:
+  grafana_storage:
+  ray_tmp:
