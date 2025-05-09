@@ -1,55 +1,4 @@
-version: "3.8"
-
 services:
-  # ========================
-  # Eval Online Stack
-  # ========================
-
-  fastapi_server:
-    build:
-      context: /home/cc/eval-online-chi/fastapi_pt
-      dockerfile: Dockerfile
-    container_name: fastapi_server
-    ports:
-      - "9002:9002"
-
-  flask:
-    build:
-      context: https://github.com/teaching-on-testbeds/gourmetgram.git#fastapi
-    container_name: flask
-    ports:
-      - "5000:5000"
-    environment:
-      - FASTAPI_SERVER_URL=http://fastapi_server:9002
-
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    ports:
-      - "3000:3000"
-    depends_on:
-      - prometheus
-    environment:
-      - GF_SECURITY_ADMIN_USER=Project20
-      - GF_SECURITY_ADMIN_PASSWORD=Project20
-
-  jupyter:
-    image: quay.io/jupyter/pytorch-notebook:pytorch-2.5.1
-    container_name: jupyter
-    ports:
-      - "8888:8888"
-    volumes:
-      - /home/cc/train/workspace:/home/Project20/work
-    command: >
-      bash -c "python3 -m pip install alibi-detect && start-notebook.sh"
 
   # ========================
   # Tracking Service Stack
@@ -124,6 +73,56 @@ services:
       /bin/sh -c "pip install psycopg2-binary boto3 &&
       mlflow server --backend-store-uri postgresql://user:password@postgres/mlflowdb \
       --artifacts-destination s3://mlflow-artifacts/ --serve-artifacts --host 0.0.0.0 --port 8000"
+  # ========================
+  # Eval Online Stack
+  # ========================
+
+  fastapi_server:
+    image: tiangolo/uvicorn-gunicorn-fastapi:python3.8
+    container_name: fastapi_server
+    ports:
+      - "9002:80"
+    volumes:
+      - ../Monitoring/FastAPI:/app
+
+  flask:
+    build:
+      context: /home/cc/MLOps-Project-Group-20
+      dockerfile: Dockerfile.flask
+    container_name: flask
+    ports:
+      - "5000:5000"
+    environment:
+      - FASTAPI_SERVER_URL=http://fastapi_server:9002
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    environment:
+      - GF_SECURITY_ADMIN_USER=Project20
+      - GF_SECURITY_ADMIN_PASSWORD=Project20
+
+  jupyter:
+    image: quay.io/jupyter/pytorch-notebook:pytorch-2.5.1
+    container_name: jupyter
+    ports:
+      - "8888:8888"
+    volumes:
+      - /home/cc/train/workspace:/home/Project20/work
+    command: >
+      bash -c "python3 -m pip install alibi-detect && start-notebook.sh"
 
 volumes:
   minio_data:
