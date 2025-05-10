@@ -61,18 +61,16 @@ services:
       - postgres
       - minio-create-bucket
     environment:
-      MLFLOW_TRACKING_URI: http://${HOST_IP}:8000
-      MLFLOW_S3_ENDPOINT_URL: http://${HOST_IP}:9000
-      AWS_ACCESS_KEY_ID: "Project20"
-      AWS_SECRET_ACCESS_KEY: "Project@20"
+      MLFLOW_TRACKING_URI: http://0.0.0.0:8000
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: "your-access-key"
+      AWS_SECRET_ACCESS_KEY: "your-secret-key"
     ports:
       - "8000:8000"
     command: >
       /bin/sh -c "pip install psycopg2-binary boto3 &&
-      mlflow server \
-        --backend-store-uri postgresql://user:password@postgres/mlflowdb \
-        --artifacts-destination s3://mlflow-artifacts/ \
-        --serve-artifacts --host 0.0.0.0 --port 8000"
+      mlflow server --backend-store-uri postgresql://user:password@postgres/mlflowdb 
+      --artifacts-destination s3://mlflow-artifacts/ --serve-artifacts --host 0.0.0.0 --port 8000"
 
 volumes:
   postgres_data:
