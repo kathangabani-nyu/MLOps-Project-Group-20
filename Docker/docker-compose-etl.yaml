@@ -1,0 +1,100 @@
+name: mlops-project20-etl
+
+volumes:
+  mlops_project20_data:
+
+services:
+  extract-data:
+    container_name: etl_extract_data
+    image: python:3.11
+    user: root
+    volumes:
+      - mlops_project20_data:/data
+    working_dir: /data
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+
+        echo "Resetting dataset directory..."
+        rm -rf cnn-daily
+        mkdir -p cnn-daily
+        cd cnn-daily
+
+        echo "Downloading dataset zip..."
+        curl -L https://nyu.box.com/shared/static/your_cnn_daily_link.zip \
+          -o cnn-daily.zip
+
+        echo "Unzipping dataset..."
+        unzip -q cnn-daily.zip
+        rm -f cnn-daily.zip
+
+        echo "Listing contents of /data after extract stage:"
+        ls -l /data
+
+  transform-data:
+    container_name: etl_transform_data
+    image: python:3.11
+    volumes:
+      - mlops_project20_data:/data
+    working_dir: /data/cnn-daily
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+
+        python3 -c '
+import os
+import shutil
+
+dataset_base_dir = "/data/cnn-daily"
+subdirs = ["train", "val", "test"]
+
+for subdir in subdirs:
+    dir_path = os.path.join(dataset_base_dir, subdir)
+    if not os.path.exists(dir_path):
+        continue
+
+    class_dir = os.path.join(dir_path, "articles")
+    os.makedirs(class_dir, exist_ok=True)
+    for f in os.listdir(dir_path):
+        if f.endswith(".txt"):
+            shutil.move(
+                os.path.join(dir_path, f),
+                os.path.join(class_dir, f)
+            )
+'
+
+        echo "Listing contents of /data/cnn-daily after transform stage:"
+        ls -l /data/cnn-daily
+
+  load-data:
+    container_name: etl_load_data
+    image: rclone/rclone:latest
+    volumes:
+      - mlops_project20_data:/data
+      - ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
+    entrypoint: /bin/sh
+    environment:
+      RCLONE_CONTAINER: mlops-project20
+    command:
+      - -c
+      - |
+        if [ -z "$RCLONE_CONTAINER" ]; then
+          echo "ERROR: RCLONE_CONTAINER is not set"
+          exit 1
+        fi
+        echo "Cleaning up existing contents of object storage..."
+        rclone delete chi_tacc:$RCLONE_CONTAINER --rmdirs || true
+
+        rclone copy /data/cnn-daily chi_tacc:$RCLONE_CONTAINER \
+        --progress \
+        --transfers=32 \
+        --checkers=16 \
+        --multi-thread-streams=4 \
+        --fast-list
+
+        echo "Listing directories in object storage after load stage:"
+        rclone lsd chi_tacc:$RCLONE_CONTAINER
