@@ -1,0 +1,117 @@
+#!/usr/bin/env python
+
+"""
+train_bart_ray_mlflow_cluster.py
+Fine-tunes BART model with Ray on a cluster, with MLflow + optional LoRA.
+"""
+
+import os
+from datetime import datetime
+import mlflow
+import torch
+from datasets import load_dataset
+from transformers import (
+    BartTokenizerFast, BartForConditionalGeneration,
+    Seq2SeqTrainer, Seq2SeqTrainingArguments,
+    DataCollatorForSeq2Seq, set_seed
+)
+from peft import get_peft_model, LoraConfig, TaskType
+
+from ray import train, tune
+from ray.train.huggingface import HuggingFaceTrainer
+from ray.train import ScalingConfig
+from transformers.integrations import MLflowCallback
+
+# Constants
+MODEL_ID = "facebook/bart-large-cnn"
+OUTPUT_DIR = os.getenv("OUTPUT_DIR", "/mnt/object/transcept-summarization/bart_output")
+SEED = 1234
+
+# Set up MLflow
+mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
+mlflow.set_experiment("transcept-summarization")
+set_seed(SEED)
+
+# Load tokenizer and dataset
+tokenizer = BartTokenizerFast.from_pretrained(MODEL_ID)
+raw_ds = load_dataset("cnn_dailymail", "3.0.0")
+train_ds = raw_ds["train"].shuffle(seed=SEED).select(range(500))
+eval_ds = raw_ds["validation"].shuffle(seed=SEED).select(range(100))
+
+def preprocess(batch):
+    inputs = tokenizer(batch["article"], truncation=True, padding="max_length", max_length=1024)
+    with tokenizer.as_target_tokenizer():
+        labels = tokenizer(batch["highlights"], truncation=True, padding="max_length", max_length=128)
+    inputs["labels"] = labels["input_ids"]
+    return inputs
+
+train_ds = train_ds.map(preprocess, batched=True, remove_columns=train_ds.column_names)
+eval_ds = eval_ds.map(preprocess, batched=True, remove_columns=eval_ds.column_names)
+
+def trainer_init_per_worker(config):
+    # MLflow run per worker
+    mlflow.start_run(run_name=f"ray_cluster_run_{datetime.now():%Y%m%d_%H%M%S}")
+    
+    model = BartForConditionalGeneration.from_pretrained(MODEL_ID)
+    
+    if config["lora_r"] > 0:
+        lora_cfg = LoraConfig(
+            r=config["lora_r"], lora_alpha=32, lora_dropout=0.05,
+            bias="none", task_type=TaskType.SEQ_2_SEQ_LM
+        )
+        model = get_peft_model(model, lora_cfg)
+
+    args = Seq2SeqTrainingArguments(
+        output_dir=OUTPUT_DIR,
+        per_device_train_batch_size=config["batch_size"],
+        per_device_eval_batch_size=config["batch_size"],
+        gradient_accumulation_steps=config["grad_accum"],
+        learning_rate=config["lr"],
+        num_train_epochs=config["epochs"],
+        evaluation_strategy="epoch",
+        save_strategy="epoch",
+        logging_strategy="epoch",
+        predict_with_generate=True,
+        bf16=config["bf16"] and torch.cuda.is_bf16_supported(),
+        fp16=False,
+        seed=SEED,
+        report_to="none"
+    )
+
+    trainer = Seq2SeqTrainer(
+        model=model,
+        args=args,
+        train_dataset=train_ds,
+        eval_dataset=eval_ds,
+        data_collator=DataCollatorForSeq2Seq(tokenizer, model),
+        callbacks=[MLflowCallback()],
+    )
+
+    trainer.train()
+    metrics = trainer.evaluate()
+    mlflow.log_metrics(metrics)
+    mlflow.pytorch.log_model(trainer.model, "model")
+    mlflow.end_run()
+
+search_space = {
+    "lr": tune.loguniform(1e-5, 5e-4),
+    "batch_size": tune.choice([2, 4]),
+    "grad_accum": tune.choice([4, 8]),
+    "epochs": tune.choice([2, 3]),
+    "lora_r": tune.choice([0, 8, 16]),
+    "bf16": tune.choice([True, False])
+}
+
+scaling_config = ScalingConfig(
+    num_workers=2,  # Adjust depending on your Ray cluster
+    use_gpu=True
+)
+
+tuner = tune.Tuner(
+    trainable=tune.with_resources(trainer_init_per_worker, {"cpu": 4, "gpu": 1}),
+    param_space=search_space,
+    tune_config=tune.TuneConfig(num_samples=4),
+    run_config=train.RunConfig(name="bart_ray_cluster"),
+)
+
+tuner.fit()
