@@ -1,0 +1,82 @@
+version: '3'
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+    networks:
+      - airflow-network
+
+  webserver:
+    image: apache/airflow:2.7.1
+    depends_on:
+      - postgres
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=True
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      - AIRFLOW_UID=50000
+      - AIRFLOW__WEBSERVER__HOST=0.0.0.0
+      - AIRFLOW__WEBSERVER__PORT=8080
+      - AIRFLOW__WEBSERVER__SECRET_KEY=your_secret_key_here
+      - AIRFLOW__WEBSERVER__WORKERS=4
+      - AIRFLOW__WEBSERVER__WORKER_CLASS=sync
+      - AIRFLOW__WEBSERVER__ACCESS_LOGFORMAT='%(asctime)s [%(levelname)s] %(message)s'
+    volumes:
+      - ./dags:/opt/airflow/dags:rw
+      - ./logs:/opt/airflow/logs:rw
+      - ./plugins:/opt/airflow/plugins:rw
+      - ./config:/opt/airflow/config:rw
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+    ports:
+      - "8080:8080"
+    command: >
+      bash -c "pip install apache-airflow-providers-docker && airflow webserver"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    user: "${AIRFLOW_UID:-50000}:0"
+    networks:
+      - airflow-network
+
+  scheduler:
+    image: apache/airflow:2.7.1
+    depends_on:
+      - postgres
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=True
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW_UID=50000
+    volumes:
+      - ./dags:/opt/airflow/dags:rw
+      - ./logs:/opt/airflow/logs:rw
+      - ./plugins:/opt/airflow/plugins:rw
+      - ./config:/opt/airflow/config:rw
+    command: >
+      bash -c "pip install apache-airflow-providers-docker && airflow scheduler"
+    user: "${AIRFLOW_UID:-50000}:0"
+    networks:
+      - airflow-network
+
+networks:
+  airflow-network:
+    driver: bridge
+
+volumes:
+  postgres-db-volume:

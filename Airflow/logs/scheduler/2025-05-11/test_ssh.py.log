@@ -1,0 +1,77 @@
+[2025-05-11T04:55:16.862+0000] {processor.py:157} INFO - Started process (PID=172) to work on /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:55:16.864+0000] {processor.py:829} INFO - Processing file /opt/airflow/dags/test_ssh.py for tasks to queue
+[2025-05-11T04:55:16.870+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:55:16.869+0000] {dagbag.py:539} INFO - Filling up the DagBag from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:55:16.894+0000] {processor.py:839} INFO - DAG(s) dict_keys(['test_ssh']) retrieved from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:55:16.941+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:55:16.940+0000] {dag.py:2915} INFO - Sync 1 DAGs
+[2025-05-11T04:55:16.977+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:55:16.976+0000] {dag.py:3696} INFO - Setting next_dagrun for test_ssh to 2025-05-10T00:00:00+00:00, run_after=2025-05-11T00:00:00+00:00
+[2025-05-11T04:55:17.002+0000] {processor.py:179} INFO - Processing /opt/airflow/dags/test_ssh.py took 0.148 seconds
+[2025-05-11T04:55:47.324+0000] {processor.py:157} INFO - Started process (PID=187) to work on /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:55:47.328+0000] {processor.py:829} INFO - Processing file /opt/airflow/dags/test_ssh.py for tasks to queue
+[2025-05-11T04:55:47.331+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:55:47.330+0000] {dagbag.py:539} INFO - Filling up the DagBag from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:55:47.345+0000] {processor.py:839} INFO - DAG(s) dict_keys(['test_ssh']) retrieved from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:55:47.382+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:55:47.382+0000] {dag.py:2915} INFO - Sync 1 DAGs
+[2025-05-11T04:55:47.413+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:55:47.412+0000] {dag.py:3696} INFO - Setting next_dagrun for test_ssh to 2025-05-10T00:00:00+00:00, run_after=2025-05-11T00:00:00+00:00
+[2025-05-11T04:55:47.434+0000] {processor.py:179} INFO - Processing /opt/airflow/dags/test_ssh.py took 0.115 seconds
+[2025-05-11T04:56:17.781+0000] {processor.py:157} INFO - Started process (PID=202) to work on /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:56:17.784+0000] {processor.py:829} INFO - Processing file /opt/airflow/dags/test_ssh.py for tasks to queue
+[2025-05-11T04:56:17.788+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:56:17.788+0000] {dagbag.py:539} INFO - Filling up the DagBag from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:56:17.809+0000] {processor.py:839} INFO - DAG(s) dict_keys(['test_ssh']) retrieved from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:56:17.857+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:56:17.856+0000] {dag.py:2915} INFO - Sync 1 DAGs
+[2025-05-11T04:56:17.889+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:56:17.888+0000] {dag.py:3696} INFO - Setting next_dagrun for test_ssh to 2025-05-10T00:00:00+00:00, run_after=2025-05-11T00:00:00+00:00
+[2025-05-11T04:56:17.914+0000] {processor.py:179} INFO - Processing /opt/airflow/dags/test_ssh.py took 0.141 seconds
+[2025-05-11T04:56:48.248+0000] {processor.py:157} INFO - Started process (PID=217) to work on /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:56:48.265+0000] {processor.py:829} INFO - Processing file /opt/airflow/dags/test_ssh.py for tasks to queue
+[2025-05-11T04:56:48.269+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:56:48.268+0000] {dagbag.py:539} INFO - Filling up the DagBag from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:56:48.284+0000] {processor.py:839} INFO - DAG(s) dict_keys(['test_ssh']) retrieved from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:56:48.330+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:56:48.330+0000] {dag.py:2915} INFO - Sync 1 DAGs
+[2025-05-11T04:56:48.363+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:56:48.363+0000] {dag.py:3696} INFO - Setting next_dagrun for test_ssh to 2025-05-10T00:00:00+00:00, run_after=2025-05-11T00:00:00+00:00
+[2025-05-11T04:56:48.392+0000] {processor.py:179} INFO - Processing /opt/airflow/dags/test_ssh.py took 0.151 seconds
+[2025-05-11T04:57:18.678+0000] {processor.py:157} INFO - Started process (PID=232) to work on /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:57:18.681+0000] {processor.py:829} INFO - Processing file /opt/airflow/dags/test_ssh.py for tasks to queue
+[2025-05-11T04:57:18.683+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:57:18.683+0000] {dagbag.py:539} INFO - Filling up the DagBag from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:57:18.698+0000] {processor.py:839} INFO - DAG(s) dict_keys(['test_ssh']) retrieved from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:57:18.744+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:57:18.743+0000] {dag.py:2915} INFO - Sync 1 DAGs
+[2025-05-11T04:57:18.781+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:57:18.780+0000] {dag.py:3696} INFO - Setting next_dagrun for test_ssh to 2025-05-10T00:00:00+00:00, run_after=2025-05-11T00:00:00+00:00
+[2025-05-11T04:57:18.811+0000] {processor.py:179} INFO - Processing /opt/airflow/dags/test_ssh.py took 0.139 seconds
+[2025-05-11T04:57:49.154+0000] {processor.py:157} INFO - Started process (PID=247) to work on /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:57:49.156+0000] {processor.py:829} INFO - Processing file /opt/airflow/dags/test_ssh.py for tasks to queue
+[2025-05-11T04:57:49.159+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:57:49.159+0000] {dagbag.py:539} INFO - Filling up the DagBag from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:57:49.173+0000] {processor.py:839} INFO - DAG(s) dict_keys(['test_ssh']) retrieved from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:57:49.213+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:57:49.212+0000] {dag.py:2915} INFO - Sync 1 DAGs
+[2025-05-11T04:57:49.244+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:57:49.244+0000] {dag.py:3696} INFO - Setting next_dagrun for test_ssh to 2025-05-10T00:00:00+00:00, run_after=2025-05-11T00:00:00+00:00
+[2025-05-11T04:57:49.267+0000] {processor.py:179} INFO - Processing /opt/airflow/dags/test_ssh.py took 0.118 seconds
+[2025-05-11T04:58:19.612+0000] {processor.py:157} INFO - Started process (PID=262) to work on /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:58:19.615+0000] {processor.py:829} INFO - Processing file /opt/airflow/dags/test_ssh.py for tasks to queue
+[2025-05-11T04:58:19.618+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:58:19.618+0000] {dagbag.py:539} INFO - Filling up the DagBag from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:58:19.633+0000] {processor.py:839} INFO - DAG(s) dict_keys(['test_ssh']) retrieved from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:58:19.678+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:58:19.677+0000] {dag.py:2915} INFO - Sync 1 DAGs
+[2025-05-11T04:58:19.708+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:58:19.708+0000] {dag.py:3696} INFO - Setting next_dagrun for test_ssh to 2025-05-10T00:00:00+00:00, run_after=2025-05-11T00:00:00+00:00
+[2025-05-11T04:58:19.734+0000] {processor.py:179} INFO - Processing /opt/airflow/dags/test_ssh.py took 0.128 seconds
+[2025-05-11T04:58:50.118+0000] {processor.py:157} INFO - Started process (PID=277) to work on /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:58:50.120+0000] {processor.py:829} INFO - Processing file /opt/airflow/dags/test_ssh.py for tasks to queue
+[2025-05-11T04:58:50.123+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:58:50.123+0000] {dagbag.py:539} INFO - Filling up the DagBag from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:58:50.137+0000] {processor.py:839} INFO - DAG(s) dict_keys(['test_ssh']) retrieved from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:58:50.204+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:58:50.203+0000] {dag.py:2915} INFO - Sync 1 DAGs
+[2025-05-11T04:58:50.238+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:58:50.238+0000] {dag.py:3696} INFO - Setting next_dagrun for test_ssh to 2025-05-10T00:00:00+00:00, run_after=2025-05-11T00:00:00+00:00
+[2025-05-11T04:58:50.264+0000] {processor.py:179} INFO - Processing /opt/airflow/dags/test_ssh.py took 0.152 seconds
+[2025-05-11T04:59:20.596+0000] {processor.py:157} INFO - Started process (PID=292) to work on /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:59:20.599+0000] {processor.py:829} INFO - Processing file /opt/airflow/dags/test_ssh.py for tasks to queue
+[2025-05-11T04:59:20.605+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:59:20.604+0000] {dagbag.py:539} INFO - Filling up the DagBag from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:59:20.628+0000] {processor.py:839} INFO - DAG(s) dict_keys(['test_ssh']) retrieved from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:59:20.693+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:59:20.692+0000] {dag.py:2915} INFO - Sync 1 DAGs
+[2025-05-11T04:59:20.736+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:59:20.735+0000] {dag.py:3696} INFO - Setting next_dagrun for test_ssh to 2025-05-10T00:00:00+00:00, run_after=2025-05-11T00:00:00+00:00
+[2025-05-11T04:59:20.766+0000] {processor.py:179} INFO - Processing /opt/airflow/dags/test_ssh.py took 0.180 seconds
+[2025-05-11T04:59:51.015+0000] {processor.py:157} INFO - Started process (PID=307) to work on /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:59:51.028+0000] {processor.py:829} INFO - Processing file /opt/airflow/dags/test_ssh.py for tasks to queue
+[2025-05-11T04:59:51.032+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:59:51.032+0000] {dagbag.py:539} INFO - Filling up the DagBag from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:59:51.051+0000] {processor.py:839} INFO - DAG(s) dict_keys(['test_ssh']) retrieved from /opt/airflow/dags/test_ssh.py
+[2025-05-11T04:59:51.094+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:59:51.093+0000] {dag.py:2915} INFO - Sync 1 DAGs
+[2025-05-11T04:59:51.128+0000] {logging_mixin.py:151} INFO - [2025-05-11T04:59:51.127+0000] {dag.py:3696} INFO - Setting next_dagrun for test_ssh to 2025-05-10T00:00:00+00:00, run_after=2025-05-11T00:00:00+00:00
+[2025-05-11T04:59:51.152+0000] {processor.py:179} INFO - Processing /opt/airflow/dags/test_ssh.py took 0.145 seconds
+[2025-05-11T05:00:21.502+0000] {processor.py:157} INFO - Started process (PID=322) to work on /opt/airflow/dags/test_ssh.py
+[2025-05-11T05:00:21.519+0000] {processor.py:829} INFO - Processing file /opt/airflow/dags/test_ssh.py for tasks to queue
+[2025-05-11T05:00:21.524+0000] {logging_mixin.py:151} INFO - [2025-05-11T05:00:21.524+0000] {dagbag.py:539} INFO - Filling up the DagBag from /opt/airflow/dags/test_ssh.py
+[2025-05-11T05:00:21.545+0000] {processor.py:839} INFO - DAG(s) dict_keys(['test_ssh']) retrieved from /opt/airflow/dags/test_ssh.py
+[2025-05-11T05:00:21.605+0000] {logging_mixin.py:151} INFO - [2025-05-11T05:00:21.604+0000] {dag.py:2915} INFO - Sync 1 DAGs
+[2025-05-11T05:00:21.636+0000] {logging_mixin.py:151} INFO - [2025-05-11T05:00:21.636+0000] {dag.py:3696} INFO - Setting next_dagrun for test_ssh to 2025-05-10T00:00:00+00:00, run_after=2025-05-11T00:00:00+00:00
+[2025-05-11T05:00:21.660+0000] {processor.py:179} INFO - Processing /opt/airflow/dags/test_ssh.py took 0.169 seconds
