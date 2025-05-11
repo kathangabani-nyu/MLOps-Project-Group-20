@@ -20,6 +20,7 @@ DATA_DIR = Path("/mnt/block") / "MLOps-Project-Group-20" / "data"
 # ── JSONL loader with optional sampling ───────────────────────────────────────
 @st.cache_data
 def read_jsonl(filename: str, max_lines: int = None) -> pd.DataFrame:
+    """Load up to max_lines (or entire file if None) from JSONL into a DataFrame."""
     file_path = DATA_DIR / filename
     if not file_path.exists():
         return pd.DataFrame()
@@ -37,8 +38,8 @@ def read_jsonl(filename: str, max_lines: int = None) -> pd.DataFrame:
 # ── Load each split (sample train for speed) ──────────────────────────────────
 TRAIN_SAMPLE_SIZE = 20_000
 train_df      = read_jsonl("train.jsonl",      max_lines=TRAIN_SAMPLE_SIZE)
-validation_df = read_jsonl("validation.jsonl")  # full, it’s small
-test_df       = read_jsonl("test.jsonl")        # full, it’s small
+validation_df = read_jsonl("validation.jsonl")  # full, small enough
+test_df       = read_jsonl("test.jsonl")        # full, small enough
 
 # ── 1) Sample Counts ──────────────────────────────────────────────────────────
 st.header("Sample Counts")
@@ -47,7 +48,6 @@ counts = {
     "Validation": len(validation_df),
     "Test":       len(test_df),
 }
-# drop any splits not present
 counts = {k: v for k, v in counts.items() if v > 0}
 fig_counts = px.bar(
     x=list(counts.keys()),
@@ -61,7 +61,6 @@ st.plotly_chart(fig_counts, use_container_width=True)
 st.header("Article Length Distribution (Words)")
 for name, df in [("Train", train_df), ("Test", test_df)]:
     if not df.empty and "article" in df.columns:
-        # compute word counts
         wc = df["article"].dropna().astype(str).apply(lambda txt: len(txt.split()))
         fig_wc = px.histogram(
             x=wc,
@@ -71,12 +70,12 @@ for name, df in [("Train", train_df), ("Test", test_df)]:
         )
         st.plotly_chart(fig_wc, use_container_width=True)
 
-# ── 3) Split‐based Exploration ─────────────────────────────────────────────────
+# ── 3) Split-based Exploration ─────────────────────────────────────────────────
 # Sidebar selector
-available = [s for s in ("train","validation","test") if (DATA_DIR/f"{s}.jsonl").exists()]
+available = [s for s in ("train", "validation", "test") if (DATA_DIR / f"{s}.jsonl").exists()]
 choice = st.sidebar.selectbox("Select dataset split", [s.capitalize() for s in available])
 split  = choice.lower()
-df     = read_jsonl(f"{split}.jsonl", max_lines=(TRAIN_SAMPLE_SIZE if split=="train" else None))
+df     = read_jsonl(f"{split}.jsonl", max_lines=(TRAIN_SAMPLE_SIZE if split == "train" else None))
 
 # Overview
 st.header(f"{choice} Set Overview")
@@ -96,13 +95,13 @@ if "label" in df.columns:
     )
     st.plotly_chart(fig_lbl, use_container_width=True)
 
-# Top-20 words in 'article'
+# Top-20 Words in 'article'
 if "article" in df.columns:
     st.subheader(f"Top 20 Words in {choice} Articles")
     ctr = Counter()
     for text in df["article"].dropna().astype(str):
         ctr.update(text.lower().split())
-    words, counts = zip(*ctr.most_common(20)) if ctr else ([],[])
+    words, counts = zip(*ctr.most_common(20)) if ctr else ([], [])
     fig_words = px.bar(
         x=list(words),
         y=list(counts),
@@ -114,3 +113,8 @@ if "article" in df.columns:
 # ── Footer ───────────────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown("Dashboard running on **kvm@tacc**, reading live from block storage.")
+
+
+
+
+
