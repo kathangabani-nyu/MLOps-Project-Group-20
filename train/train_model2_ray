@@ -1,0 +1,168 @@
+#!/usr/bin/env python
+
+"""
+train_phi3p5_ray_mlflow_cluster.py
+Fine-tunes microsoft/phi-3.5-mini-instruct on SQuAD v2 using Ray + MLflow.
+Includes:
+ * MLflow tracking to MinIO
+ * Distributed Ray cluster execution
+ * Optional LoRA
+ * FlashAttention2 if available
+"""
+
+import os
+from datetime import datetime
+
+import mlflow
+import torch
+from datasets import load_dataset, Dataset as HFDataset
+from transformers import (
+    AutoTokenizer, AutoModelForCausalLM,
+    TrainingArguments, set_seed
+)
+from transformers.integrations import MLflowCallback
+from peft import LoraConfig, TaskType, get_peft_model
+from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
+
+from ray import train, tune
+from ray.train import ScalingConfig
+from ray.train.torch import TorchTrainer
+from ray.train.torch import TorchCheckpoint
+
+# S3 + MLflow ENV
+os.environ.update({
+    "AWS_ACCESS_KEY_ID": os.getenv("MINIO_ACCESS_KEY", "Project20"),
+    "AWS_SECRET_ACCESS_KEY": os.getenv("MINIO_SECRET_KEY", "Project@20"),
+    "MLFLOW_S3_ENDPOINT_URL": "http://129.114.108.23:9000",
+    "AWS_S3_ENDPOINT_URL": "http://129.114.108.23:9000",
+    "AWS_S3_USE_SSL": "false",
+    "AWS_S3_VERIFY": "false",
+    "AWS_REGION": "us-east-1"
+})
+
+mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
+mlflow.set_experiment("phi3p5-qa")
+
+########################################
+# CONFIGURATION
+########################################
+
+model_id = "microsoft/phi-3.5-mini-instruct"
+seed = 42
+
+def ray_train_loop(config):
+    set_seed(seed)
+    mlflow.start_run(run_name=f"phi3p5_ray_{datetime.now():%Y%m%d_%H%M%S}")
+
+    tokenizer = AutoTokenizer.from_pretrained(model_id, use_fast=True)
+    tokenizer.pad_token = tokenizer.unk_token
+    tokenizer.padding_side = "left"
+
+    dtype = torch.bfloat16 if (config["precision"] == "bf16" and torch.cuda.is_bf16_supported()) else torch.float16
+    try:
+        import flash_attn  # noqa
+        attn_impl = "flash_attention_2"
+        print("✔ Using FlashAttention2")
+    except ImportError:
+        attn_impl = "sdpa"
+        print("ℹ Falling back to SDPA")
+
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id, torch_dtype=dtype,
+        attn_implementation=attn_impl,
+        device_map="auto"
+    )
+
+    if config["lora_r"] > 0:
+        lora_cfg = LoraConfig(
+            r=config["lora_r"], lora_alpha=16, lora_dropout=0.05,
+            task_type=TaskType.CAUSAL_LM,
+            target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "down_proj", "up_proj"]
+        )
+        model = get_peft_model(model, lora_cfg)
+
+    raw = load_dataset("squad_v2")
+    def fmt(ex):
+        question = ex["question"]
+        answer = ex["answers"]["text"][0] if ex["answers"]["text"] else "No answer"
+        return {
+            "instruction": "Answer the question based on the summary:",
+            "input": f"Summary: {ex['context']}\nQuestion: {question}",
+            "output": answer,
+        }
+
+    train_raw = raw["train"].shuffle(seed=seed).select(range(2000)).map(fmt)
+    val_raw = raw["validation"].shuffle(seed=seed).select(range(500)).map(fmt)
+
+    def to_chat(x):
+        msgs = [
+            {"role": "user", "content": x["instruction"] + "\n" + x["input"]},
+            {"role": "assistant", "content": x["output"]},
+        ]
+        return {
+            "text": tokenizer.apply_chat_template(msgs, add_generation_prompt=False, tokenize=False)
+        }
+
+    train_ds = HFDataset.from_pandas(train_raw.map(to_chat, remove_columns=train_raw.column_names).to_pandas())
+    val_ds = HFDataset.from_pandas(val_raw.map(to_chat, remove_columns=val_raw.column_names).to_pandas())
+
+    collator = DataCollatorForCompletionOnlyLM(
+        response_template="<|assistant|>", tokenizer=tokenizer
+    )
+
+    args = TrainingArguments(
+        output_dir="./output_phi3p5_ray",
+        per_device_train_batch_size=config["batch_size"],
+        per_device_eval_batch_size=config["batch_size"],
+        gradient_accumulation_steps=config["grad_accum"],
+        learning_rate=config["lr"],
+        num_train_epochs=config["epochs"],
+        logging_strategy="steps",
+        logging_steps=10,
+        eval_strategy="epoch",
+        save_strategy="epoch",
+        report_to=["mlflow"],
+        fp16=(dtype == torch.float16),
+        bf16=(dtype == torch.bfloat16),
+        seed=seed,
+    )
+
+    trainer = SFTTrainer(
+        model=model,
+        args=args,
+        train_dataset=train_ds,
+        eval_dataset=val_ds,
+        data_collator=collator,
+        callbacks=[MLflowCallback()]
+    )
+
+    trainer.train()
+    results = trainer.evaluate()
+    mlflow.log_metrics(results)
+    trainer.save_model("./output_phi3p5_ray/final")
+    tokenizer.save_pretrained("./output_phi3p5_ray/final")
+    mlflow.pytorch.log_model(trainer.model, "model")
+    mlflow.log_artifacts("./output_phi3p5_ray/final", artifact_path="final-model")
+    mlflow.end_run()
+
+########################################
+# RAY TUNER
+########################################
+
+search_space = {
+    "lr": tune.loguniform(1e-5, 1e-3),
+    "batch_size": tune.choice([2, 4]),
+    "grad_accum": tune.choice([2, 4]),
+    "epochs": tune.choice([2, 3]),
+    "lora_r": tune.choice([0, 8, 16]),
+    "precision": tune.choice(["bf16", "fp16"])
+}
+
+tuner = tune.Tuner(
+    tune.with_resources(ray_train_loop, {"cpu": 4, "gpu": 1}),
+    param_space=search_space,
+    tune_config=tune.TuneConfig(num_samples=4),
+    run_config=train.RunConfig(name="phi3p5_ray_cluster")
+)
+
+tuner.fit()
