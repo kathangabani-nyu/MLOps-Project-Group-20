@@ -1,190 +1,227 @@
 #!/usr/bin/env python
+
 """
-train_phi3_ray_mlflow.py
---------------------------------
-LoRA fine‑tunes microsoft/Phi‑3‑mini‑4k‑instruct on SQuAD v2
-with Ray Train (multi‑GPU) + MLflow tracking / registry.
+train_phi3p5_ray_mlflow.py
+--------------------------
+LoRA fine-tunes microsoft/phi-3.5-mini-instruct on SQuAD v2
+for question-answering based on a provided summary, with:
+ * MLflow tracking + registry
+ * Minio S3 for artifacts
+ * Optional LoRA PEFT
+ * Gradient accumulation & bf16
+ * Ray logic commented out
+ * Fallback to standard attention if FlashAttention2 unavailable
 """
 
-import argparse, os, logging, json
+import os
 from datetime import datetime
-import mlflow
-from datasets import load_dataset, Dataset as HFDataset
-import torch
 
+import mlflow
+import torch
+from datasets import load_dataset, Dataset as HFDataset
 from transformers import (
-    AutoTokenizer, AutoModelForCausalLM,
-    TrainingArguments, set_seed
+    AutoTokenizer,
+    AutoModelForCausalLM,
+    TrainingArguments,
+    set_seed
 )
+from transformers.integrations import MLflowCallback
 from peft import LoraConfig, TaskType, get_peft_model
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
 
-# ------------- Ray -------------
-import ray
-from ray import train
-from ray.train import ScalingConfig, Checkpoint
-from ray.train.torch import TorchTrainer
-# --------------------------------
+# ------------------------------------------------
+# Minio (S3) credentials & settings
+# ------------------------------------------------
+# Replace defaults or set via environment
+os.environ.update({
+    "AWS_ACCESS_KEY_ID":     os.getenv("MINIO_ACCESS_KEY", "Project20"),
+    "AWS_SECRET_ACCESS_KEY": os.getenv("MINIO_SECRET_KEY", "Project@20"),
+    "MLFLOW_S3_ENDPOINT_URL": "http://129.114.108.23:9000",
+    "AWS_S3_ENDPOINT_URL":    "http://129.114.108.23:9000",
+    "AWS_S3_USE_SSL":         "false",
+    "AWS_S3_VERIFY":          "false",
+    "AWS_REGION":             "us-east-1"
+})
 
-# ---------- CLI -----------------
-def parse_args():
-    p = argparse.ArgumentParser()
-    p.add_argument("--gpus", type=int, default=1, help="#GPUs Ray uses")
-    p.add_argument("--batch", type=int, default=1)
-    p.add_argument("--grad_accum", type=int, default=2)
-    p.add_argument("--epochs", type=int, default=3)
-    p.add_argument("--precision", choices=["fp32", "bf16"], default="bf16")
-    p.add_argument("--lora_r", type=int, default=16, help="0 = full FT")
-    p.add_argument("--output_dir", default="phi3_squad_ft")
-    p.add_argument("--resume_from", default=None)
-    p.add_argument("--seed", type=int, default=1234)
-    return p.parse_args()
-# --------------------------------
+# ------------------------------------------------
+# MLflow server & experiment
+# ------------------------------------------------
+mlflow.set_tracking_uri("http://129.114.108.23:8000")
+mlflow.set_experiment(
+    name="phi3p5-qa",
+    artifact_location="s3://mlflow-bucket/phi3p5-qa"
+)
 
+########################################
+# CONFIGURATION
+########################################
 
-def build_datasets(seed=42):
-    raw = load_dataset("squad_v2")
+gpus        = 1
+batch       = 2
+grad_accum  = 4
+epochs      = 3
+precision   = "bf16"
+lora_r      = 16
+output_dir  = "phi3p5_qa_ft"
+resume_from = None
+seed        = 42
+model_id    = "microsoft/phi-3.5-mini-instruct"
 
-    def fmt(ex):
-        answer = ex["answers"]["text"][0] if ex["answers"]["text"] else "No answer"
-        return {
-            "instruction": "Answer the question based on the context:",
-            "input": f"Context: {ex['context']}\nQuestion: {ex['question']}",
-            "output": answer,
-        }
+########################################
+# MLflow SETUP
+########################################
 
-    train_ds = raw["train"].map(fmt).shuffle(seed=seed).select(range(10000))
-    val_ds   = raw["validation"].map(fmt).shuffle(seed=seed).select(range(2000))
-    return train_ds, val_ds
+set_seed(seed)
+run = mlflow.start_run(
+    run_name=f"phi3p5_qa_{datetime.now():%Y%m%d_%H%M%S}"
+)
 
+########################################
+# MODEL & TOKENIZER
+########################################
 
-def ray_train_loop(cfg):
-    set_seed(cfg["seed"])
-    mlflow.set_tracking_uri("http://localhost:5000")
-    mlflow.set_experiment("transcept-qa")
-    mlflow.start_run(run_id=cfg["run_id"])
+tokenizer = AutoTokenizer.from_pretrained(model_id, use_fast=True)
+tokenizer.pad_token    = tokenizer.unk_token
+tokenizer.padding_side = "left"
 
-    tokenizer = AutoTokenizer.from_pretrained(cfg["model_id"], use_fast=True)
-    tokenizer.pad_token = tokenizer.unk_token
-    tokenizer.padding_side = "left"
+dtype = torch.bfloat16 if (precision == "bf16" and torch.cuda.is_bf16_supported()) else torch.float16
+# dynamically choose attention implementation
+try:
+    import flash_attn  # noqa
+    attn_impl = "flash_attention_2"
+    print("✔ Using FlashAttention2")
+except ImportError:
+    attn_impl = "sdpa"
+    print("ℹ FlashAttention2 not available, falling back to SDPA")
 
-    dtype = torch.bfloat16 if (cfg["precision"] == "bf16" and
-                               torch.cuda.is_bf16_supported()) else torch.float16
-    attn_impl = "flash_attention_2" if dtype == torch.bfloat16 else "sdpa"
+model = AutoModelForCausalLM.from_pretrained(
+    model_id,
+    torch_dtype=dtype,
+    attn_implementation=attn_impl,
+    device_map="auto"
+)
 
-    model = AutoModelForCausalLM.from_pretrained(
-        cfg["model_id"],
-        torch_dtype=dtype,
-        attn_implementation=attn_impl,
-        device_map="auto",
-    )
+if torch.cuda.is_available():
+    model = model.to("cuda")
+    print(f"✔ Model moved to device: {next(model.parameters()).device}")
+else:
+    print("⚠ CUDA not available; running on CPU")
 
-    if cfg["lora_r"] > 0:
-        lora_cfg = LoraConfig(
-            r=cfg["lora_r"], lora_alpha=16, lora_dropout=0.05,
-            task_type=TaskType.CAUSAL_LM,
-            target_modules=[
-              "k_proj","q_proj","v_proj","o_proj",
-              "gate_proj","down_proj","up_proj"]
-        )
-        model = get_peft_model(model, lora_cfg)
-
-    train_raw, val_raw = build_datasets(cfg["seed"])
-
-    def to_chat(row):
-        msgs = [
-          {"role": "user",
-           "content": f"{row['instruction']}\n{row['input']}"},
-          {"role": "assistant", "content": row["output"]},
+if lora_r > 0:
+    lora_cfg = LoraConfig(
+        r=lora_r, lora_alpha=16, lora_dropout=0.05,
+        task_type=TaskType.CAUSAL_LM,
+        target_modules=[
+            "k_proj","q_proj","v_proj","o_proj",
+            "gate_proj","down_proj","up_proj"
         ]
-        return {"text": tokenizer.apply_chat_template(
-            msgs, add_generation_prompt=False, tokenize=False)}
-
-    train_ds = train_raw.map(to_chat, remove_columns=train_raw.column_names)
-    val_ds   = val_raw.map(to_chat,   remove_columns=val_raw.column_names)
-    train_hf = HFDataset.from_pandas(train_ds.to_pandas())
-    val_hf   = HFDataset.from_pandas(val_ds.to_pandas())
-
-    collator = DataCollatorForCompletionOnlyLM(
-        response_template="<|assistant|>", tokenizer=tokenizer
     )
+    model = get_peft_model(model, lora_cfg)
 
-    args = TrainingArguments(
-        output_dir           = cfg["output_dir"],
-        per_device_train_batch_size = cfg["batch"],
-        per_device_eval_batch_size  = cfg["batch"],
-        gradient_accumulation_steps = cfg["grad_accum"],
-        learning_rate        = 1e-4,
-        num_train_epochs     = cfg["epochs"],
-        logging_strategy     = "epoch",
-        eval_strategy        = "epoch",
-        save_strategy        = "epoch",
-        seed                 = cfg["seed"],
-        fp16                 = (dtype==torch.float16),
-        bf16                 = (dtype==torch.bfloat16),
-        ddp_find_unused_parameters=False,
-    )
+########################################
+# DATASET PREP
+########################################
 
-    trainer = SFTTrainer(
-        model           = model,
-        args            = args,
-        train_dataset   = train_hf,
-        eval_dataset    = val_hf,
-        data_collator   = collator,
-    )
+raw = load_dataset("squad_v2")
 
-    if cfg["resume_from"]:
-        trainer.train(resume_from_checkpoint=cfg["resume_from"])
-    else:
-        trainer.train()
-
-    metrics = trainer.evaluate(max_length=32, num_beams=4)
-    mlflow.log_metrics(metrics)
-
-    ckpt_dir = os.path.join(cfg["output_dir"], "final")
-    trainer.save_model(ckpt_dir); tokenizer.save_pretrained(ckpt_dir)
-    mlflow.pytorch.log_model(trainer.model, artifact_path="model")
-
-    mlflow.end_run()
-    return Checkpoint.from_directory(ckpt_dir)
-
-
-# ===================== MAIN =========================
-def main():
-    a = parse_args()
-
-    run = mlflow.start_run(run_name=f"phi3_ray_{datetime.now():%Y%m%d_%H%M%S}")
-    run_id = run.info.run_id
-    mlflow.end_run()
-
-    cfg = {
-        "model_id"   : "microsoft/Phi-3-mini-4k-instruct",
-        "batch"      : a.batch,
-        "grad_accum" : a.grad_accum,
-        "epochs"     : a.epochs,
-        "precision"  : a.precision,
-        "lora_r"     : a.lora_r,
-        "output_dir" : a.output_dir,
-        "resume_from": a.resume_from,
-        "seed"       : a.seed,
-        "run_id"     : run_id,
+def fmt(ex):
+    question = ex["question"]
+    answer   = ex["answers"]["text"][0] if ex["answers"]["text"] else "No answer"
+    return {
+        "instruction": "Answer the question based on the summary:",
+        "input": f"Summary: {ex['context']}\nQuestion: {question}",
+        "output": answer,
     }
 
-    ray.init()
-    trainer = TorchTrainer(
-        train_loop_per_worker = ray_train_loop,
-        scaling_config = ScalingConfig(
-            num_workers=a.gpus,
-            use_gpu=True,
-            resources_per_worker={"GPU":1},
-        ),
-        train_loop_config = cfg,
-        run_config = train.RunConfig(storage_path=cfg["output_dir"])
-    )
-    res = trainer.fit()
-    print("Best checkpoint:", res.checkpoint.uri)
-    ray.shutdown()
+train_raw = raw["train"].shuffle(seed=seed).select(range(10000)).map(fmt)
+val_raw   = raw["validation"].shuffle(seed=seed).select(range(2000)).map(fmt)
 
+def to_chat(x):
+    msgs = [
+        {"role": "user",      "content": x["instruction"] + "\n" + x["input"]},
+        {"role": "assistant", "content": x["output"]},
+    ]
+    return {"text": tokenizer.apply_chat_template(
+        msgs, add_generation_prompt=False, tokenize=False
+    )}
 
-if __name__ == "__main__":
-    main()
+train_ds = train_raw.map(to_chat, remove_columns=train_raw.column_names)
+val_ds   = val_raw.map(to_chat,   remove_columns=val_raw.column_names)
+train_hf = HFDataset.from_pandas(train_ds.to_pandas())
+val_hf   = HFDataset.from_pandas(val_ds.to_pandas())
+
+collator = DataCollatorForCompletionOnlyLM(
+    response_template="<|assistant|>",
+    tokenizer=tokenizer
+)
+
+########################################
+# TRAINING ARGUMENTS
+########################################
+
+tf_args = TrainingArguments(
+    output_dir                  = output_dir,
+    per_device_train_batch_size = batch,
+    per_device_eval_batch_size  = batch,
+    gradient_accumulation_steps = grad_accum,
+    learning_rate               = 1e-4,
+    num_train_epochs            = epochs,
+    logging_strategy            = "steps",
+    logging_steps               = 10,
+    eval_strategy               = "epoch",
+    save_strategy               = "epoch",
+    report_to                   = ["mlflow"],
+    run_name                    = run.info.run_name,
+    seed                        = seed,
+    fp16                        = (dtype == torch.float16),
+    bf16                        = (dtype == torch.bfloat16),
+    ddp_find_unused_parameters  = False,
+)
+
+########################################
+# TRAIN
+########################################
+
+trainer = SFTTrainer(
+    model         = model,
+    args          = tf_args,
+    train_dataset = train_hf,
+    eval_dataset  = val_hf,
+    data_collator = collator,
+    callbacks     = [MLflowCallback]
+)
+
+if resume_from:
+    trainer.train(resume_from_checkpoint=resume_from)
+else:
+    trainer.train()
+
+########################################
+# EVALUATE & LOG
+########################################
+
+eval_results = trainer.predict(val_hf, max_length=32, num_beams=4)
+metrics = eval_results.metrics
+print(metrics)
+mlflow.log_metrics(metrics)
+
+ckpt_dir = os.path.join(output_dir, "final")
+trainer.save_model(ckpt_dir)
+tokenizer.save_pretrained(ckpt_dir)
+mlflow.pytorch.log_model(trainer.model, artifact_path="model")
+# also upload final checkpoint to Minio via MLflow
+mlflow.log_artifacts(ckpt_dir, artifact_path="final-model")
+mlflow.end_run()
+
+# Ray logic (commented out)
+# import ray
+# from ray import train
+# from ray.train import ScalingConfig, Checkpoint
+# from ray.train.torch import TorchTrainer
+#
+# def ray_train_loop(cfg): pass
+# ray.init()
+# trainer = TorchTrainer(...)
+# result = trainer.fit()
+# print("Best checkpoint:", result.checkpoint.uri)
+# ray.shutdown()
