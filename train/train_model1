@@ -26,7 +26,7 @@ from peft import get_peft_model, LoraConfig, TaskType
 # Force MLflow to use the newly initialized server
 # ------------------------------------------------
 # Unconditionally set the correct MLflow tracking URI
-mlflow.set_tracking_uri("http://129.114.25.36:8000")
+mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
 
 ########################################
 # CONFIGURATION
