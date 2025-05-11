@@ -20,7 +20,6 @@ DATA_DIR = Path("/mnt/block") / "MLOps-Project-Group-20" / "data"
 # ── JSONL loader with optional sampling ───────────────────────────────────────
 @st.cache_data
 def read_jsonl(filename: str, max_lines: int = None) -> pd.DataFrame:
-    """Load up to max_lines (or entire file if None) from JSONL into a DataFrame."""
     file_path = DATA_DIR / filename
     if not file_path.exists():
         return pd.DataFrame()
@@ -71,19 +70,19 @@ for name, df in [("Train", train_df), ("Test", test_df)]:
         st.plotly_chart(fig_wc, use_container_width=True)
 
 # ── 3) Split-based Exploration ─────────────────────────────────────────────────
-# Sidebar selector
+# Sidebar selector (now here so it doesn’t suppress the above)
 available = [s for s in ("train", "validation", "test") if (DATA_DIR / f"{s}.jsonl").exists()]
 choice = st.sidebar.selectbox("Select dataset split", [s.capitalize() for s in available])
 split  = choice.lower()
 df     = read_jsonl(f"{split}.jsonl", max_lines=(TRAIN_SAMPLE_SIZE if split == "train" else None))
 
-# Overview
+# a) Overview
 st.header(f"{choice} Set Overview")
 st.write(f"**Rows:** {df.shape[0]} **Columns:** {df.shape[1]}")
 if not df.empty:
     st.dataframe(df.head(), height=300)
 
-# Label distribution
+# b) Label distribution
 if "label" in df.columns:
     st.subheader(f"{choice} Label Distribution")
     lc = df["label"].value_counts()
@@ -95,7 +94,7 @@ if "label" in df.columns:
     )
     st.plotly_chart(fig_lbl, use_container_width=True)
 
-# Top-20 Words in 'article'
+# c) Top-20 Words in 'article'
 if "article" in df.columns:
     st.subheader(f"Top 20 Words in {choice} Articles")
     ctr = Counter()
@@ -113,8 +112,3 @@ if "article" in df.columns:
 # ── Footer ───────────────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown("Dashboard running on **kvm@tacc**, reading live from block storage.")
-
-
-
-
-
