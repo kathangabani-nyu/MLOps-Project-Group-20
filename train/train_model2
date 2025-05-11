@@ -46,10 +46,14 @@ os.environ.update({
 # ------------------------------------------------
 # MLflow server & experiment
 # ------------------------------------------------
-mlflow.set_tracking_uri("http://129.114.108.23:8000")
+mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
 mlflow.set_experiment(
     name="phi3p5-qa",
-    artifact_location="s3://mlflow-bucket/phi3p5-qa"
+    
+    output_dir = os.getenv(
+    "OUTPUT_DIR",
+    "/mnt/object/transcept-QA/QA_output"
+)
 )
 
 ########################################
