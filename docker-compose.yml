@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: transcept-backend
+    ports:
+      - "3500:8000"
+    volumes:
+      - ./backend/models:/app/models:ro
+      - /mnt/block/bart-large-cnn:/app/models/base:ro
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: transcept-frontend
+    ports:
+      - "5000:8501"
+    depends_on:
+      - backend
+    environment:
+      - API_URL=http://backend:8000/summarize
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8501/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
