@@ -1,0 +1,21 @@
+# Dockerfile
+
+FROM python:3.11-slim
+
+# Install Python dependencies
+RUN pip install --no-cache-dir streamlit pandas plotly
+
+# Create app directory
+WORKDIR /app
+
+# Copy the dashboard script
+COPY business_dashboard.py /app/
+
+# Expose Streamlit port
+EXPOSE 5565
+
+# Run Streamlit
+CMD ["streamlit", "run", "business_dashboard.py", \
+     "--server.address=0.0.0.0", \
+     "--server.port=5565", \
+     "--server.enableCORS=false"]
