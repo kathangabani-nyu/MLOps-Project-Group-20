@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  dashboard:
+    build: .
+    image: business-dashboard:latest
+    ports:
+      - "5565:5565"
+    volumes:
+      - /mnt/block:/mnt/block:ro
