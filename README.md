@@ -1,3 +1,4 @@
+![Blank diagram (3)](https://github.com/user-attachments/assets/7a55c086-b0df-45bd-8a0b-ab84f2a85003)
 ---
 base_model: facebook/bart-large-cnn
 library_name: peft
@@ -65,7 +66,7 @@ docker compose up --build -d  # Building UI and FAST API along with the Model
 Artifacts are versioned in the MinIO bucket `preprocessed`, path‑convention `<lecture_id>/<stage>.parquet`
 
 **Data Dashboard:** Interactive Streamlit-based Dashboard that reads directly from block storage on kvm@tacc (mounted at `/mnt/block/MLOps-Project-Group-20/data`) providing rapid, visual feedback on raw train/validation/test JSONL datasets.
-**Demo:** [http://129.114.25.36:5565/](http://129.114.25.36:5565/)
+**Demo:** [http://129.114.25.36:5565/](http://129.114.25.36:9002/)
 ## Model Training & Retraining Workflows
 
 ### Model Training at Scale
