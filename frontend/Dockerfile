@@ -1,14 +1,17 @@
-FROM python:3.11-slim
-
-RUN pip install --no-cache-dir streamlit pandas plotly
-
+FROM python:3.10-slim
 WORKDIR /app
 
-COPY business_dashboard.py /app/
+# 1) ship static ffmpeg / ffprobe
+COPY bin/ffmpeg  /usr/local/bin/ffmpeg
+COPY bin/ffprobe /usr/local/bin/ffprobe
+RUN chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe
 
-EXPOSE 5565
+# 2) python deps
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-CMD ["streamlit", "run", "business_dashboard.py", \
-     "--server.address=0.0.0.0", \
-     "--server.port=5565", \
-     "--server.enableCORS=false"]
+# 3) the Streamlit UI
+COPY app.py .
+
+EXPOSE 5000
+CMD ["streamlit", "run", "app.py", "--server.port=5000", "--server.address=0.0.0.0"]
