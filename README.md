@@ -1,5 +1,4 @@
 Transcept – LoRA‑Fine‑Tuned Summarization & Q‑A for Lecture Transcripts
-Capstone Project – NYU (CS‑GY 📚)
 
 Table of Contents
 Background & Value Proposition
