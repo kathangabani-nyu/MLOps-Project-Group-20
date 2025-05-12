@@ -51,7 +51,7 @@ docker compose up --build -d  # Building UI and FAST API along with the Model
 | `backend/` | FastAPI implementation – see main.py |
 | `dashboard/` | Grafana & business dashboards – e.g. business_dashboard.py |
 | `frontend/` | Simple React UI (requirements in requirements.txt) |
-| `infrastructure/` | Chameleon launch scripts – launch_k8s_cluster.py |
+| `infrastructure/` | Chameleon launch scripts |
 | `train/` | Ray + PyLightning LoRA fine‑tunes – train_model2_ray.py |
 | `docker-compose.yml` | One‑shot local deployment |
 
@@ -60,12 +60,12 @@ docker compose up --build -d  # Building UI and FAST API along with the Model
 1. **Raw Lecture Audio & Video** → stored in the MinIO bucket `raw-inputs` (mounted at `/mnt/object`)
 2. **Transcription** – Frontend/app.py wraps Whisper‑large‑v3. Word‑error‑rate (WER) stats logged to Prometheus
 3. **Cleaning & Segmentation** – Storage/create_server.ipynb removes stopwords, normalises Unicode, and chunks text into ≤512 token windows
-4. **Dataset Prep** – Data Jason files aligns CNN/DailyMail reference summaries and labels each chunk
+4. **Dataset Prep** – Data Jason files aligns CNN/DailyMail reference summaries and labels each chunk.
 
 Artifacts are versioned in the MinIO bucket `preprocessed`, path‑convention `<lecture_id>/<stage>.parquet`
 
 **Data Dashboard:** Interactive Streamlit-based Dashboard that reads directly from block storage on kvm@tacc (mounted at `/mnt/block/MLOps-Project-Group-20/data`) providing rapid, visual feedback on raw train/validation/test JSONL datasets.
-
+**Demo:** [http://129.114.25.36:5565/](http://129.114.25.36:5565/)
 ## Model Training & Retraining Workflows
 
 ### Model Training at Scale
@@ -124,7 +124,6 @@ POST /summarize
 - HorizontalPodAutoscaler for GPU utilization-based scaling
 
 ### Planned Extensions
-- `/transcribe` – Whisper ASR endpoint (work‑in‑progress)
 - `/qa` – Phi‑3.5 Mini Q‑A endpoint (post‑MVP)
 
 ## Monitoring & Dashboards
@@ -138,10 +137,12 @@ POST /summarize
 
 | Stage | Tool | Trigger |
 |-------|------|---------|
-| Build | GitHub Actions | PR push |
-| Image Publish | Docker Hub | Build success |
-| Deploy | Argo CD | Image tag main-* |
-| Canary + Rollback | Argo metrics | ROUGE‑L regression |
+| Model Training | AirflowDockerOperator(log_model) | DAG Scheduled daily |
+| Image build| AirflowDockerOperator(build_container) | On log_model success |
+| Staging Deploy |  AirflowDockerOperator(build_container) | On both build_container and offline_eval success |
+| Canary release| AirflowDockerOperator(deploy_canary) | On load_test success |
+| Production deploy| AirflowDockerOperator(deploy_prod) | On monitor_performance success |
+
 
 ### Airflow Pipeline
 - DAG: `airflow/dags/audio_ml_pipeline.py`
@@ -171,7 +172,10 @@ docker compose push  # requires registry creds
 # Deploy micro‑services
 kubectl apply -f backend/deployment/namespaces.yaml
 kubectl apply -f backend/deployment/fastapi_gpu.yaml
-kubectl apply -k Monitoring/kustomize/
+
+# For Bringing up Airflow (service Orchestration )
+cd /mnt/block/airflow
+docker compose -f docker-compose.yaml up -d --build
 
 # Tear down
 chameleon delete --cluster transcept
