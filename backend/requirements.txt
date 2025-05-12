@@ -8,3 +8,11 @@ uvicorn==0.24.0
 python-multipart==0.0.6
 huggingface-hub
 accelerate==0.21.0
+onnx
+onnx-simplifier
+onnxruntime
+onnxruntime-tools
+scikit-learn
+pillow
+requests
+prometheus-client
